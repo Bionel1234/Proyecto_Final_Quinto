@@ -1,33 +1,49 @@
-# JorgeElUltimoGladiador
+# Jorge: El Último Gladiador
 
-A [libGDX](https://libgdx.com/) project generated with [gdx-liftoff](https://github.com/libgdx/gdx-liftoff).
+## Integrantes
+* Agustín Belas
+* Matias Vassallo
+* Santino Laura Calle
 
-This project was generated with a template including simple application launchers and an `ApplicationAdapter` extension that draws libGDX logo.
+## Descripción del Proyecto
+Videojuego de acción y plataformas 2D desarrollado en Java utilizando el framework LibGDX. El jugador controla a Jorge, un gladiador que se enfrenta a desafíos y combate enemigos dentro de una arena.
 
-## Platforms
+Este proyecto fue generado con la herramienta LibGDX Liftoff y está estructurado mediante Gradle.
 
-- `core`: Main module with the application logic shared by all platforms.
-- `lwjgl3`: Primary desktop platform using LWJGL3; was called 'desktop' in older docs.
+## Tecnologías Utilizadas
+* **Lenguaje:** Java 17+
+* **Framework:** LibGDX (v1.13.1)
+* **Motor Desktop:** LWJGL3
+* **Gestor de Construcción:** Gradle
+* **Control de Versiones:** Git y GitHub
 
-## Gradle
+## Estructura del Proyecto
+* `core/`: Contiene la lógica principal del videojuego y las clases agnósticas a la plataforma.
+* `lwjgl3/`: Módulo de ejecución para computadoras de escritorio.
+* `assets/`: Carpeta destinada a los recursos gráficos y sonoros.
 
-This project uses [Gradle](https://gradle.org/) to manage dependencies.
-The Gradle wrapper was included, so you can run Gradle tasks using `gradlew.bat` or `./gradlew` commands.
-Useful Gradle tasks and flags:
+## Requerimientos Previos
+Para poder importar, compilar y ejecutar este proyecto localmente se necesita:
+* **JDK (Java Development Kit):** Versión 17 o superior correctamente instalada.
+* **IDE Recomendado:** Eclipse IDE for Java Developers, IntelliJ IDEA o VS Code.
+* **Soporte de Gradle:** El IDE debe contar con el plugin de Gradle habilitado para importar el proyecto correctamente.
+* **Git:** Para clonar el repositorio en tu equipo.
 
-- `--continue`: when using this flag, errors will not stop the tasks from running.
-- `--daemon`: thanks to this flag, Gradle daemon will be used to run chosen tasks.
-- `--offline`: when using this flag, cached dependency archives will be used.
-- `--refresh-dependencies`: this flag forces validation of all dependencies. Useful for snapshot versions.
-- `build`: builds sources and archives of every project.
-- `cleanEclipse`: removes Eclipse project data.
-- `cleanIdea`: removes IntelliJ project data.
-- `clean`: removes `build` folders, which store compiled classes and built archives.
-- `eclipse`: generates Eclipse project data.
-- `idea`: generates IntelliJ project data.
-- `lwjgl3:jar`: builds application's runnable jar, which can be found at `lwjgl3/build/libs`.
-- `lwjgl3:run`: starts the application.
-- `test`: runs unit tests (if any).
+## Cómo Ejecutar el Juego
 
-Note that most tasks that are not specific to a single project can be run with `name:` prefix, where the `name` should be replaced with the ID of a specific project.
-For example, `core:clean` removes `build` folder only from the `core` project.
+1. Clonar este repositorio en tu computadora usando el siguiente comando en la terminal:
+   git clone https://github.com/Bionel1234/JorgeElUltimoGladiador.git
+
+2. Abrir el entorno de desarrollo (IDE) e importar el proyecto:
+   * En **Eclipse**: Ir a `File` > `Import` > `Gradle` > `Existing Gradle Project`, seleccionar la carpeta raíz del repositorio y presionar `Finish`.
+   * En **IntelliJ IDEA**: Ir a `File` > `Open`, seleccionar el archivo `build.gradle` ubicado en la raíz del proyecto y elegir la opción de abrir como proyecto Gradle.
+
+3. Esperar a que Gradle descargue todas las dependencias necesarias de LibGDX.
+
+4. Ejecutar la aplicación:
+   * Ir al módulo `lwjgl3`.
+   * Desplegar el paquete del código fuente hasta ubicar la clase principal `Lwjgl3Launcher.java`.
+   * Hacer clic derecho sobre el archivo y seleccionar **Run As > Java Application** (o `Run Lwjgl3Launcher.main()` en IntelliJ).
+
+## Estado Actual del Proyecto
+Para esta primera entrega, el estado del proyecto corresponde a la **Configuración inicial y estructura del proyecto**. Se ha generado la base funcional con LibGDX Liftoff, configurado los módulos `core` y `lwjgl3`, verificado la ejecución de la ventana nativa y vinculado el repositorio local con GitHub bajo el control de versiones con Git.
