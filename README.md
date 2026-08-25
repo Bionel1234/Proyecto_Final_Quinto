@@ -22,6 +22,11 @@ Este proyecto fue generado con la herramienta LibGDX Liftoff y está estructurad
 * `lwjgl3/`: Módulo de ejecución para computadoras de escritorio.
 * `assets/`: Carpeta destinada a los recursos gráficos y sonoros.
 
+## Documentación y Wiki del Proyecto
+Toda la documentación técnica, la propuesta formal aprobada y el diseño del videojuego se encuentran alojados en la Wiki oficial del repositorio:
+
+👉 [Acceder a la Wiki del Proyecto](https://github.com/Bionel1234/Proyecto_Final_Quinto/wiki)
+
 ## Requerimientos Previos
 Para poder importar, compilar y ejecutar este proyecto localmente se necesita:
 * **JDK (Java Development Kit):** Versión 17 o superior correctamente instalada.
