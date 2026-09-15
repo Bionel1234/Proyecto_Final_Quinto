@@ -1,36 +1,32 @@
 package com.gladiador.juego;
 
-import com.badlogic.gdx.ApplicationAdapter;
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.Game;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
-public class MainClass extends ApplicationAdapter {
-    private SpriteBatch batch;
+// Cambiamos ApplicationAdapter por Game para poder gestionar pantallas
+public class MainClass extends Game {
+
+    // SpriteBatch público para que las pantallas puedan compartir el mismo dibujador
+    public SpriteBatch batch;
 
     @Override
     public void create() {
-        // Inicializamos el SpriteBatch (encargado de enviar las imágenes a la GPU)
+        // Inicializamos el SpriteBatch (envía los gráficos a la GPU)
         batch = new SpriteBatch();
+
+        // Le decimos al juego que inicie mostrando la pantalla del menú
+        this.setScreen(new MenuScreen(this));
     }
 
     @Override
     public void render() {
-        // Limpiamos la pantalla pintándola de color azul oscuro / gris
-        Gdx.gl.glClearColor(0.1f, 0.1f, 0.15f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
-        // Bloque de renderizado gráfico
-        batch.begin();
-        
-        // Aquí dibujaremos a Jorge, el escenario y los enemigos
-        
-        batch.end();
+        // Ejecuta el render() de la pantalla que esté activa
+        super.render();
     }
 
     @Override
     public void dispose() {
-        // Liberamos la memoria RAM/GPU asignada al SpriteBatch
+        // Liberamos la memoria del SpriteBatch al cerrar el juego
         batch.dispose();
     }
 }
