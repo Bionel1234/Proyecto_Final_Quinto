@@ -3,30 +3,32 @@ package com.gladiador.juego;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
-// Cambiamos ApplicationAdapter por Game para poder gestionar pantallas
+// Clase principal: crea el dibujador y muestra el menu.
 public class MainClass extends Game {
 
-    // SpriteBatch público para que las pantallas puedan compartir el mismo dibujador
+    // Un solo SpriteBatch es compartido por todas las pantallas.
     public SpriteBatch batch;
 
     @Override
     public void create() {
-        // Inicializamos el SpriteBatch (envía los gráficos a la GPU)
+        // Crear el objeto que dibuja imagenes y textos.
         batch = new SpriteBatch();
 
-        // Le decimos al juego que inicie mostrando la pantalla del menú
-        this.setScreen(new MenuScreen(this));
+        // Abrir el juego en el menu principal.
+        setScreen(new MenuScreen(this));
     }
 
     @Override
     public void render() {
-        // Ejecuta el render() de la pantalla que esté activa
+        // Game ejecuta el render de la pantalla activa.
         super.render();
     }
 
     @Override
     public void dispose() {
-        // Liberamos la memoria del SpriteBatch al cerrar el juego
-        batch.dispose();
+        // Liberar el dibujador al cerrar el juego.
+        if (batch != null) {
+            batch.dispose();
+        }
     }
 }
