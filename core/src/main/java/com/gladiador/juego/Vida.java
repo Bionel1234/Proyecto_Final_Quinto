@@ -28,6 +28,10 @@ public class Vida {
 
     // Dibujar en pantalla la imagen que corresponde a la cantidad actual.
     public void dibujar(SpriteBatch batch) {
+        if (cantidad <= 0) {
+            return;
+        }
+
         Texture imagenActual = tresVidas;
 
         if (cantidad == 2) {
@@ -52,10 +56,9 @@ public class Vida {
     }
 
     // Cambiar la cantidad de vidas.
-    // Por ahora se permite un valor entre 1 y 3.
     public void establecerVidas(int nuevaCantidad) {
-        if (nuevaCantidad < 1) {
-            cantidad = 1;
+        if (nuevaCantidad < 0) {
+            cantidad = 0;
             return;
         }
 

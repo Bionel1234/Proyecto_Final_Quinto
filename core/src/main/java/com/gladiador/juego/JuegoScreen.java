@@ -7,6 +7,8 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
@@ -31,6 +33,8 @@ public class JuegoScreen implements Screen {
     private float tiempoMazmorra;
     private Jugador jugador;
     private Vida vida;
+    private BitmapFont fuente;
+    private boolean puedeEntrarAlMapa;
 
     // Recibir la referencia al juego.
     public JuegoScreen(MainClass game) {
@@ -44,6 +48,8 @@ public class JuegoScreen implements Screen {
         cargarMazmorra();
         jugador = new Jugador(180f, calcularSuelo());
         vida = new Vida();
+        fuente = new BitmapFont();
+        puedeEntrarAlMapa = false;
     }
 
     // Crear una camara 2D que mantiene la proporcion de la pantalla.
@@ -94,10 +100,22 @@ public class JuegoScreen implements Screen {
 
         // Actualizar y dibujar todos los elementos.
         jugador.actualizar(delta, y);
+        puedeEntrarAlMapa = jugador.getX() >= ANCHO - 260f;
+
         game.batch.begin();
         game.batch.draw(fondo, x, y, ancho, alto);
         jugador.dibujar(game.batch);
         vida.dibujar(game.batch);
+
+        if (puedeEntrarAlMapa) {
+            fuente.draw(game.batch, "Pulsa E para entrar al Mapa 1", 420f, 650f);
+            if (Gdx.input.isKeyJustPressed(Input.Keys.E)) {
+                game.setScreen(new MapaScreen(game));
+                game.batch.end();
+                return;
+            }
+        }
+
         game.batch.end();
 
         // ESC vuelve al menu.
@@ -142,5 +160,6 @@ public class JuegoScreen implements Screen {
         }
         if (jugador != null) jugador.dispose();
         if (vida != null) vida.dispose();
+        if (fuente != null) fuente.dispose();
     }
 }

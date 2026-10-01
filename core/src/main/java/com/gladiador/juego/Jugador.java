@@ -94,6 +94,10 @@ public class Jugador {
 
     // Este metodo se llama una vez por cada imagen del juego.
     public void actualizar(float delta, float posicionDelSuelo) {
+        actualizar(delta, posicionDelSuelo, JuegoScreen.ANCHO - ANCHO_PERSONAJE * ESCALA_ATAQUE);
+    }
+
+    public void actualizar(float delta, float posicionDelSuelo, float limiteMaximoX) {
         // Aumentar el tiempo de la animacion actual.
         tiempoAnimacion = tiempoAnimacion + delta;
 
@@ -106,8 +110,8 @@ public class Jugador {
         // Aplicar la gravedad y apoyar los pies en el suelo.
         aplicarGravedad(delta, posicionDelSuelo);
 
-        // Evitar que Jorge salga por los lados de la pantalla.
-        limitarPosicionHorizontal();
+        // Evitar que Jorge salga por los lados del mundo.
+        limitarPosicionHorizontal(limiteMaximoX);
     }
 
     // Leer las teclas A, D, W y flecha arriba.
@@ -183,10 +187,40 @@ public class Jugador {
         }
     }
 
-    // No permitir que Jorge salga del ancho de la pantalla.
-    private void limitarPosicionHorizontal() {
-        float posicionMaxima = JuegoScreen.ANCHO - ANCHO_PERSONAJE * ESCALA_ATAQUE;
+    public float getX() {
+        return x;
+    }
 
+    public float getY() {
+        return y;
+    }
+
+    public boolean estaAtacando() {
+        return estaAtacando;
+    }
+
+    public boolean miraDerecha() {
+        return miraDerecha;
+    }
+
+    public com.badlogic.gdx.math.Rectangle getHitbox() {
+        float ancho = ANCHO_PERSONAJE * ESCALA_NORMAL;
+        float alto = ALTO_PERSONAJE * ESCALA_NORMAL;
+        float xHitbox = x - (ancho - ANCHO_PERSONAJE) / 2f;
+        float yHitbox = y - 30f / 256f * alto;
+        return new com.badlogic.gdx.math.Rectangle(xHitbox, yHitbox, ancho, alto);
+    }
+
+    public com.badlogic.gdx.math.Rectangle getAreaDeAtaque() {
+        float ancho = 95f;
+        float alto = 100f;
+        float xAtaque = miraDerecha ? x + 80f : x - ancho - 20f;
+        float yAtaque = y + 25f;
+        return new com.badlogic.gdx.math.Rectangle(xAtaque, yAtaque, ancho, alto);
+    }
+
+    // No permitir que Jorge salga del ancho del mundo.
+    private void limitarPosicionHorizontal(float posicionMaxima) {
         if (x < 0f) {
             x = 0f;
         }
@@ -198,6 +232,10 @@ public class Jugador {
 
     // Dibujar el frame correcto de Jorge.
     public void dibujar(SpriteBatch batch) {
+        dibujar(batch, 0f);
+    }
+
+    public void dibujar(SpriteBatch batch, float desplazamientoX) {
         // Obtener la imagen que corresponde al estado actual.
         TextureRegion imagenActual = obtenerImagenActual();
 
@@ -215,7 +253,7 @@ public class Jugador {
         float alto = ALTO_PERSONAJE * escalaActual;
 
         // Centrar los sprites que tienen diferente espacio transparente.
-        float posicionX = x - (ancho - ANCHO_PERSONAJE) / 2f;
+        float posicionX = x - desplazamientoX - (ancho - ANCHO_PERSONAJE) / 2f;
 
         // Corregir el espacio transparente que queda debajo de algunos sprites.
         float espacioInferior = 30f;
