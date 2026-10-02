@@ -35,6 +35,7 @@ public class JuegoScreen implements Screen {
     private Jugador jugador;
     private Comerciante comerciante;
     private Vida vida;
+    private Monedas monedas;
     private BitmapFont fuente;
     private Music musicaLobby;
     private boolean puedeEntrarAlMapa;
@@ -53,6 +54,7 @@ public class JuegoScreen implements Screen {
         jugador = new Jugador((ANCHO - 180f) / 2f, calcularSuelo());
         comerciante = new Comerciante(250f, calcularSuelo() + 1f);
         vida = new Vida();
+        monedas = new Monedas();
         fuente = new BitmapFont();
         musicaLobby = Gdx.audio.newMusic(Gdx.files.internal("sonidos/musica_lobby.mp3"));
         musicaLobby.setLooping(true);
@@ -121,6 +123,7 @@ public class JuegoScreen implements Screen {
         comerciante.dibujar(game.batch);
         jugador.dibujar(game.batch);
         vida.dibujar(game.batch);
+        monedas.dibujar(game.batch);
 
         if (cercaDelComerciante && !hablandoConComerciante) {
             fuente.draw(game.batch, "Pulsa F para hablar con el comerciante", 420f, 650f);
@@ -191,6 +194,7 @@ public class JuegoScreen implements Screen {
         if (jugador != null) jugador.dispose();
         if (comerciante != null) comerciante.dispose();
         if (vida != null) vida.dispose();
+        if (monedas != null) monedas.dispose();
         if (fuente != null) fuente.dispose();
         if (musicaLobby != null) musicaLobby.dispose();
     }

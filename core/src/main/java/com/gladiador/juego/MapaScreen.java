@@ -34,9 +34,7 @@ public class MapaScreen implements Screen {
     private OrthographicCamera camera;
     private Viewport viewport;
     private Texture fondoMapa;
-    private Texture imagenGameOver;
-    private Texture botonVolver;
-    private Texture botonSalir;
+    private Texture pantallaGameOver;
     private ArrayList<Enemigo> enemigos;
     private Jugador jugador;
     private Vida vida;
@@ -62,9 +60,7 @@ public class MapaScreen implements Screen {
     public void show() {
         configurarCamara();
         fondoMapa = new Texture(Gdx.files.internal("Mapa 1/scene_animated.png"));
-        imagenGameOver = new Texture(Gdx.files.internal("gameover/panel.png"));
-        botonVolver = new Texture(Gdx.files.internal("gameover/volver.png"));
-        botonSalir = new Texture(Gdx.files.internal("gameover/salir.png"));
+        pantallaGameOver = new Texture(Gdx.files.internal("gameover/pantalla.png"));
         jugador = new Jugador(250f, 150f);
         vida = new Vida();
         enemigos = new ArrayList<>();
@@ -129,11 +125,10 @@ public class MapaScreen implements Screen {
 
             // 1) Jorge golpea: solo cuenta durante los frames del tajo.
             if (jugador.estaAtaqueActivo() && jugador.getAreaDeAtaque().overlaps(enemigo.getHitbox())) {
-                boolean remate = jugador.getComboActual() == 3;
-                float fuerzaEmpuje = remate ? 620f : 300f;
+                float fuerzaEmpuje = 300f;
                 if (enemigo.recibirGolpe(jugador.getNumeroAtaque(), jugador.getDireccionAtaque(), fuerzaEmpuje)) {
-                    activarHitstop(remate ? 0.11f : 0.06f);
-                    activarTemblor(remate ? 0.18f : 0.08f, remate ? 9f : 4f);
+                    activarHitstop(0.06f);
+                    activarTemblor(0.08f, 4f);
                 }
             }
 
@@ -233,9 +228,6 @@ public class MapaScreen implements Screen {
                 710f
             );
         }
-        if (jugador.getComboActual() >= 2) {
-            fuente.draw(game.batch, "Combo x" + jugador.getComboActual(), 80f, 680f);
-        }
         if (tiempoTextoParry > 0f) {
             fuente.getData().setScale(1.6f);
             fuente.setColor(0.6f, 0.9f, 1f, 1f);
@@ -248,6 +240,7 @@ public class MapaScreen implements Screen {
         if (oleadasCompletadas
             && jugador.getX() >= ANCHO_MAPA - DISTANCIA_SEGUNDA_PUERTA
             && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+            Monedas.recompensarPrimerMapa();
             game.setScreen(new JuegoScreen(game));
             return;
         }
@@ -375,28 +368,26 @@ public class MapaScreen implements Screen {
         shapeRenderer.rect(0f, 0f, ANCHO, ALTO);
         shapeRenderer.end();
 
-        float panelAncho = 550f;
-        float panelAlto = 600f;
-        float panelX = (ANCHO - panelAncho) / 2f;
-        float panelY = (ALTO - panelAlto) / 2f;
-        float botonAncho = 340f;
-        float botonAlto = botonAncho * botonVolver.getHeight() / botonVolver.getWidth();
-        float botonX = (ANCHO - botonAncho) / 2f;
-        float volverY = 360f;
-        float salirY = 210f;
-
         game.batch.begin();
-        game.batch.draw(imagenGameOver, panelX, panelY, panelAncho, panelAlto);
-        game.batch.draw(botonVolver, botonX, volverY, botonAncho, botonAlto);
-        game.batch.draw(botonSalir, botonX, salirY, botonAncho, botonAlto);
+        game.batch.draw(pantallaGameOver, 0f, 0f, ANCHO, ALTO);
         game.batch.end();
 
         Vector3 mouse = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f);
         viewport.unproject(mouse);
-        boolean volverSeleccionado = mouse.x >= botonX && mouse.x <= botonX + botonAncho
-            && mouse.y >= volverY && mouse.y <= volverY + botonAlto;
-        boolean salirSeleccionado = mouse.x >= botonX && mouse.x <= botonX + botonAncho
-            && mouse.y >= salirY && mouse.y <= salirY + botonAlto;
+        float escalaX = ANCHO / 1536f;
+        float escalaY = ALTO / 1024f;
+        float volverX = 417f * escalaX;
+        float volverAncho = (1120f - 417f) * escalaX;
+        float volverY = ALTO - 830f * escalaY;
+        float volverAlto = (830f - 678f) * escalaY;
+        float salirX = 473f * escalaX;
+        float salirAncho = (1065f - 473f) * escalaX;
+        float salirY = ALTO - 989f * escalaY;
+        float salirAlto = (989f - 836f) * escalaY;
+        boolean volverSeleccionado = mouse.x >= volverX && mouse.x <= volverX + volverAncho
+            && mouse.y >= volverY && mouse.y <= volverY + volverAlto;
+        boolean salirSeleccionado = mouse.x >= salirX && mouse.x <= salirX + salirAncho
+            && mouse.y >= salirY && mouse.y <= salirY + salirAlto;
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             if (volverSeleccionado) {
                 game.setScreen(new JuegoScreen(game));
@@ -430,14 +421,8 @@ public class MapaScreen implements Screen {
         if (fondoMapa != null) {
             fondoMapa.dispose();
         }
-        if (imagenGameOver != null) {
-            imagenGameOver.dispose();
-        }
-        if (botonVolver != null) {
-            botonVolver.dispose();
-        }
-        if (botonSalir != null) {
-            botonSalir.dispose();
+        if (pantallaGameOver != null) {
+            pantallaGameOver.dispose();
         }
         for (Enemigo enemigo : enemigos) {
             if (enemigo != null) {

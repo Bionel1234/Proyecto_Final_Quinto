@@ -41,6 +41,7 @@ public class Jugador {
     private ArrayList<Texture> imagenes = new ArrayList<Texture>();
     private Sound sonidoSalto;
     private Sound sonidoAtaque;
+    private Sound sonidoEscudo;
 
     // Posicion horizontal de Jorge.
     private float x;
@@ -73,20 +74,8 @@ public class Jugador {
     private long numeroAtaque;
     private boolean escudoMiraDerecha = true;
 
-    // --- Estado nuevo del combate ---
-
     // Direccion en la que se lanzo el ataque actual (no cambia a mitad del tajo).
     private boolean ataqueMiraDerecha = true;
-
-    // Tiempo que le queda al "ataque guardado": si pulsas atacar durante un tajo,
-    // el siguiente sale solo en cuanto se puede encadenar.
-    private float bufferAtaque = 0f;
-
-    // Numero del golpe dentro del combo (0 = sin combo, 1, 2 o 3).
-    private int comboActual = 0;
-
-    // Tiempo desde que termino el ultimo ataque (para saber si el combo sigue vivo).
-    private float tiempoSinAtacar = 0f;
 
     // Tiempo que falta para poder volver a usar el escudo.
     private float cooldownEscudo = 0f;
@@ -117,10 +106,6 @@ public class Jugador {
     private static final float DURACION_ATAQUE = 12 * 0.07f;
     private static final float ATAQUE_ACTIVO_DESDE = 0.28f;
     private static final float ATAQUE_ACTIVO_HASTA = 0.49f;
-    // A partir de aca se puede cancelar la recuperacion para encadenar otro golpe o usar el escudo.
-    private static final float INICIO_CANCELACION = 0.63f;
-    private static final float VENTANA_BUFFER = 0.40f;
-    private static final float VENTANA_COMBO = 0.50f;
     // Pequeño paso hacia adelante al tajar, para que el golpe "pese".
     private static final float INICIO_IMPULSO = 0.14f;
     private static final float VELOCIDAD_IMPULSO = 150f;
@@ -147,6 +132,7 @@ public class Jugador {
         cargarTodasLasAnimaciones();
         sonidoSalto = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_salto.mp3"));
         sonidoAtaque = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_ataque.mp3"));
+        sonidoEscudo = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_escudo.mp3"));
     }
 
     // Este metodo se llama una vez por cada imagen del juego.
@@ -273,9 +259,9 @@ public class Jugador {
             estaProtegiendo = true;
             escudoMiraDerecha = miraDerecha;
             tiempoEscudo = 0f;
+            sonidoEscudo.play();
             estaAtacando = false;
             tiempoAtaque = 0f;
-            bufferAtaque = 0f;
         }
     }
 
@@ -327,46 +313,22 @@ public class Jugador {
         boolean sePulsoAtaque = Gdx.input.isKeyJustPressed(Input.Keys.SPACE)
             || Gdx.input.isButtonJustPressed(Input.Buttons.LEFT);
 
-        if (sePulsoAtaque && !estaProtegiendo) {
-            if (!estaAtacando) {
-                iniciarAtaque();
-            } else {
-                // Ya esta atacando: guardar la pulsacion para encadenar el siguiente golpe.
-                bufferAtaque = VENTANA_BUFFER;
-            }
+        if (sePulsoAtaque && !estaProtegiendo && !estaAtacando) {
+            iniciarAtaque();
         }
 
         if (estaAtacando) {
-            // Contar el tiempo transcurrido.
             tiempoAtaque = tiempoAtaque + delta;
-            bufferAtaque = Math.max(0f, bufferAtaque - delta);
-
-            // Encadenar el siguiente golpe en cuanto se puede cancelar la recuperacion.
-            if (bufferAtaque > 0f && tiempoAtaque >= INICIO_CANCELACION) {
-                iniciarAtaque();
-                return;
-            }
-
-            // Terminar el ataque cuando pasa su duracion.
             if (tiempoAtaque >= DURACION_ATAQUE) {
                 estaAtacando = false;
                 tiempoAtaque = 0f;
                 tiempoAnimacion = 0f;
-                tiempoSinAtacar = 0f;
-            }
-        } else {
-            tiempoSinAtacar = tiempoSinAtacar + delta;
-            if (tiempoSinAtacar > VENTANA_COMBO) {
-                comboActual = 0;
             }
         }
     }
 
-    // Empezar un tajo nuevo (o encadenar uno).
+    // Empezar un tajo individual; cada nueva pulsacion inicia otro ataque.
     private void iniciarAtaque() {
-        boolean encadena = estaAtacando || (comboActual > 0 && tiempoSinAtacar <= VENTANA_COMBO);
-        comboActual = encadena ? (comboActual % 3) + 1 : 1;
-
         // Al empezar el tajo se puede elegir hacia donde apuntar con A/D.
         boolean izquierda = Gdx.input.isKeyPressed(Input.Keys.A);
         boolean derecha = Gdx.input.isKeyPressed(Input.Keys.D);
@@ -379,7 +341,6 @@ public class Jugador {
 
         estaAtacando = true;
         tiempoAtaque = 0f;
-        bufferAtaque = 0f;
         numeroAtaque++;
         tiempoAnimacion = 0f;
         sonidoAtaque.play();
@@ -396,10 +357,8 @@ public class Jugador {
         // El golpe interrumpe lo que estaba haciendo.
         estaAtacando = false;
         tiempoAtaque = 0f;
-        bufferAtaque = 0f;
         estaProtegiendo = false;
         tiempoEscudo = 0f;
-        comboActual = 0;
     }
 
     // Jorge bloqueo un golpe con el escudo: retrocede un poco pero no pierde vida.
@@ -454,10 +413,6 @@ public class Jugador {
 
     public long getNumeroAtaque() {
         return numeroAtaque;
-    }
-
-    public int getComboActual() {
-        return comboActual;
     }
 
     // 1 si el tajo actual va hacia la derecha, -1 si va hacia la izquierda.
@@ -624,6 +579,9 @@ public class Jugador {
         }
         if (sonidoAtaque != null) {
             sonidoAtaque.dispose();
+        }
+        if (sonidoEscudo != null) {
+            sonidoEscudo.dispose();
         }
     }
 }
