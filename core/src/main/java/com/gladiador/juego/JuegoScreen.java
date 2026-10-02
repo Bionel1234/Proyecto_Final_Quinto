@@ -3,6 +3,7 @@ package com.gladiador.juego;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
@@ -32,9 +33,12 @@ public class JuegoScreen implements Screen {
     private Animation<TextureRegion> mazmorra;
     private float tiempoMazmorra;
     private Jugador jugador;
+    private Comerciante comerciante;
     private Vida vida;
     private BitmapFont fuente;
+    private Music musicaLobby;
     private boolean puedeEntrarAlMapa;
+    private boolean hablandoConComerciante;
 
     // Recibir la referencia al juego.
     public JuegoScreen(MainClass game) {
@@ -46,10 +50,16 @@ public class JuegoScreen implements Screen {
         // Preparar la vista y cargar todos los objetos.
         configurarCamara();
         cargarMazmorra();
-        jugador = new Jugador(180f, calcularSuelo());
+        jugador = new Jugador((ANCHO - 180f) / 2f, calcularSuelo());
+        comerciante = new Comerciante(250f, calcularSuelo() + 1f);
         vida = new Vida();
         fuente = new BitmapFont();
+        musicaLobby = Gdx.audio.newMusic(Gdx.files.internal("sonidos/musica_lobby.mp3"));
+        musicaLobby.setLooping(true);
+        musicaLobby.setVolume(0.08f);
+        musicaLobby.play();
         puedeEntrarAlMapa = false;
+        hablandoConComerciante = false;
     }
 
     // Crear una camara 2D que mantiene la proporcion de la pantalla.
@@ -101,15 +111,29 @@ public class JuegoScreen implements Screen {
         // Actualizar y dibujar todos los elementos.
         jugador.actualizar(delta, y);
         puedeEntrarAlMapa = jugador.getX() >= ANCHO - 260f;
+        boolean cercaDelComerciante = comerciante.estaCerca(jugador.getX());
+        if (!cercaDelComerciante) {
+            hablandoConComerciante = false;
+        }
 
         game.batch.begin();
         game.batch.draw(fondo, x, y, ancho, alto);
+        comerciante.dibujar(game.batch);
         jugador.dibujar(game.batch);
         vida.dibujar(game.batch);
 
+        if (cercaDelComerciante && !hablandoConComerciante) {
+            fuente.draw(game.batch, "Pulsa F para hablar con el comerciante", 420f, 650f);
+        }
+        if (hablandoConComerciante) {
+            fuente.draw(game.batch, "Comerciante: Bienvenido, gladiador.", 430f, 650f);
+            fuente.draw(game.batch, "Pronto tendre mercancia para ti.", 430f, 620f);
+            fuente.draw(game.batch, "Pulsa F para cerrar", 430f, 590f);
+        }
+
         if (puedeEntrarAlMapa) {
-            fuente.draw(game.batch, "Pulsa E para entrar al Mapa 1", 420f, 650f);
-            if (Gdx.input.isKeyJustPressed(Input.Keys.E)) {
+            fuente.draw(game.batch, "Pulsa ENTER para entrar al Mapa 1", 420f, 650f);
+            if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
                 game.setScreen(new MapaScreen(game));
                 game.batch.end();
                 return;
@@ -117,6 +141,10 @@ public class JuegoScreen implements Screen {
         }
 
         game.batch.end();
+
+        if (cercaDelComerciante && Gdx.input.isKeyJustPressed(Input.Keys.F)) {
+            hablandoConComerciante = !hablandoConComerciante;
+        }
 
         // ESC vuelve al menu.
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
@@ -149,7 +177,9 @@ public class JuegoScreen implements Screen {
 
     @Override
     public void hide() {
-        // No hay recursos de audio que detener en esta pantalla.
+        if (musicaLobby != null) {
+            musicaLobby.stop();
+        }
     }
 
     @Override
@@ -159,7 +189,9 @@ public class JuegoScreen implements Screen {
             for (Texture textura : texturasMazmorra) textura.dispose();
         }
         if (jugador != null) jugador.dispose();
+        if (comerciante != null) comerciante.dispose();
         if (vida != null) vida.dispose();
         if (fuente != null) fuente.dispose();
+        if (musicaLobby != null) musicaLobby.dispose();
     }
 }

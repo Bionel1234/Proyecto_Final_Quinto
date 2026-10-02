@@ -1,6 +1,8 @@
 package com.gladiador.juego;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -8,9 +10,11 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.math.Rectangle;
 
 // Esta clase representa al personaje Jorge.
-// Aqui se controla su movimiento, salto, ataque y animaciones.
+// Aqui se controla su movimiento, salto, ataque, escudo y animaciones.
 public class Jugador {
 
     // Animacion para caminar hacia la derecha.
@@ -30,10 +34,13 @@ public class Jugador {
 
     // Animacion para atacar hacia la izquierda.
     private Animation<TextureRegion> ataqueIzquierda;
+    private Animation<TextureRegion> escudo;
 
     // Lista con todas las imagenes cargadas.
     // Se usa para poder liberarlas al cerrar la pantalla.
     private ArrayList<Texture> imagenes = new ArrayList<Texture>();
+    private Sound sonidoSalto;
+    private Sound sonidoAtaque;
 
     // Posicion horizontal de Jorge.
     private float x;
@@ -55,12 +62,43 @@ public class Jugador {
 
     // Indica si Jorge esta atacando.
     private boolean estaAtacando = false;
+    private boolean estaProtegiendo = false;
 
     // Tiempo que lleva reproduciendose la animacion actual.
     private float tiempoAnimacion = 0f;
 
     // Tiempo que lleva realizando el ataque.
     private float tiempoAtaque = 0f;
+    private float tiempoEscudo = 0f;
+    private long numeroAtaque;
+    private boolean escudoMiraDerecha = true;
+
+    // --- Estado nuevo del combate ---
+
+    // Direccion en la que se lanzo el ataque actual (no cambia a mitad del tajo).
+    private boolean ataqueMiraDerecha = true;
+
+    // Tiempo que le queda al "ataque guardado": si pulsas atacar durante un tajo,
+    // el siguiente sale solo en cuanto se puede encadenar.
+    private float bufferAtaque = 0f;
+
+    // Numero del golpe dentro del combo (0 = sin combo, 1, 2 o 3).
+    private int comboActual = 0;
+
+    // Tiempo desde que termino el ultimo ataque (para saber si el combo sigue vivo).
+    private float tiempoSinAtacar = 0f;
+
+    // Tiempo que falta para poder volver a usar el escudo.
+    private float cooldownEscudo = 0f;
+
+    // Tiempo restante sin poder recibir daño despues de un golpe.
+    private float tiempoInvulnerable = 0f;
+
+    // Tiempo restante en el que Jorge esta aturdido y no puede actuar.
+    private float tiempoAturdido = 0f;
+
+    // Empuje horizontal por golpes recibidos (se va apagando solo).
+    private float velocidadEmpujeX = 0f;
 
     // Velocidad con la que Jorge camina.
     private static final float VELOCIDAD_CAMINAR = 260f;
@@ -73,15 +111,32 @@ public class Jugador {
 
     // Tamaño normal de Jorge.
     private static final float ANCHO_PERSONAJE = 180f;
-    private static final float ALTO_PERSONAJE = 180f;
+    private static final float ALTO_VISIBLE_PERSONAJE = 137f;
 
-    // Escalas necesarias porque los sprites no tienen todos el mismo espacio transparente.
-    private static final float ESCALA_NORMAL = 1f;
-    private static final float ESCALA_SALTO = 1.20f;
-    private static final float ESCALA_ATAQUE = 1.35f;
+    // Ataque: 12 frames de 0.07s. El tajo real esta en los frames 5 a 7.
+    private static final float DURACION_ATAQUE = 12 * 0.07f;
+    private static final float ATAQUE_ACTIVO_DESDE = 0.28f;
+    private static final float ATAQUE_ACTIVO_HASTA = 0.49f;
+    // A partir de aca se puede cancelar la recuperacion para encadenar otro golpe o usar el escudo.
+    private static final float INICIO_CANCELACION = 0.63f;
+    private static final float VENTANA_BUFFER = 0.40f;
+    private static final float VENTANA_COMBO = 0.50f;
+    // Pequeño paso hacia adelante al tajar, para que el golpe "pese".
+    private static final float INICIO_IMPULSO = 0.14f;
+    private static final float VELOCIDAD_IMPULSO = 150f;
+    // Cuanto control de movimiento queda mientras se ataca.
+    private static final float CONTROL_DURANTE_ATAQUE = 0.25f;
 
-    // Tiempo que dura un ataque.
-    private static final float DURACION_ATAQUE = 0.75f;
+    // Escudo.
+    private static final float DURACION_MINIMA_ESCUDO = 0.36f;
+    private static final float VENTANA_PARRY = 0.20f;
+    private static final float COOLDOWN_ESCUDO = 0.60f;
+
+    // Daño recibido.
+    private static final float DURACION_INVULNERABLE = 0.90f;
+    private static final float DURACION_ATURDIMIENTO = 0.22f;
+    private static final float EMPUJE_AL_RECIBIR_DANIO = 420f;
+    private static final float EMPUJE_AL_BLOQUEAR = 180f;
 
     // Crear a Jorge en la posicion inicial recibida.
     public Jugador(float posicionInicialX, float posicionInicialY) {
@@ -90,25 +145,50 @@ public class Jugador {
 
         // Cargar las imagenes de todas las animaciones.
         cargarTodasLasAnimaciones();
+        sonidoSalto = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_salto.mp3"));
+        sonidoAtaque = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_ataque.mp3"));
     }
 
     // Este metodo se llama una vez por cada imagen del juego.
     public void actualizar(float delta, float posicionDelSuelo) {
-        actualizar(delta, posicionDelSuelo, JuegoScreen.ANCHO - ANCHO_PERSONAJE * ESCALA_ATAQUE);
+        actualizar(delta, posicionDelSuelo, JuegoScreen.ANCHO - ANCHO_PERSONAJE);
     }
 
     public void actualizar(float delta, float posicionDelSuelo, float limiteMaximoX) {
+        actualizar(delta, posicionDelSuelo, limiteMaximoX, Collections.<Rectangle>emptyList());
+    }
+
+    public void actualizar(
+        float delta,
+        float posicionDelSuelo,
+        float limiteMaximoX,
+        List<Rectangle> plataformas
+    ) {
         // Aumentar el tiempo de la animacion actual.
         tiempoAnimacion = tiempoAnimacion + delta;
 
-        // Revisar si se pulso la tecla de ataque.
-        revisarAtaque(delta);
+        if (tiempoInvulnerable > 0f) {
+            tiempoInvulnerable = Math.max(0f, tiempoInvulnerable - delta);
+        }
 
-        // Revisar movimiento y salto.
-        revisarMovimiento(delta);
+        if (tiempoAturdido > 0f) {
+            // Aturdido: no se puede atacar, protegerse ni caminar.
+            tiempoAturdido = Math.max(0f, tiempoAturdido - delta);
+            velocidadX = 0f;
+        } else {
+            actualizarEscudo(delta);
+
+            // Revisar si se pulso la tecla de ataque.
+            revisarAtaque(delta);
+
+            // Revisar movimiento y salto.
+            revisarMovimiento(delta);
+        }
+
+        aplicarEmpuje(delta);
 
         // Aplicar la gravedad y apoyar los pies en el suelo.
-        aplicarGravedad(delta, posicionDelSuelo);
+        aplicarGravedad(delta, posicionDelSuelo, plataformas);
 
         // Evitar que Jorge salga por los lados del mundo.
         limitarPosicionHorizontal(limiteMaximoX);
@@ -118,17 +198,28 @@ public class Jugador {
     private void revisarMovimiento(float delta) {
         // Primero suponemos que Jorge esta quieto.
         velocidadX = 0f;
-
-        // Si se mantiene presionada la tecla A, caminar hacia la izquierda.
-        if (Gdx.input.isKeyPressed(Input.Keys.A)) {
-            velocidadX = -VELOCIDAD_CAMINAR;
-            miraDerecha = false;
+        if (estaProtegiendo) {
+            return;
         }
 
-        // Si se mantiene presionada la tecla D, caminar hacia la derecha.
+        float direccion = 0f;
+        if (Gdx.input.isKeyPressed(Input.Keys.A)) {
+            direccion = -1f;
+        }
         if (Gdx.input.isKeyPressed(Input.Keys.D)) {
-            velocidadX = VELOCIDAD_CAMINAR;
-            miraDerecha = true;
+            direccion = 1f;
+        }
+
+        if (estaAtacando) {
+            // Durante el ataque Jorge no gira y casi no se puede mover,
+            // pero el tajo lo empuja un poco hacia adelante.
+            velocidadX = direccion * VELOCIDAD_CAMINAR * CONTROL_DURANTE_ATAQUE;
+            if (tiempoAtaque >= INICIO_IMPULSO && tiempoAtaque <= ATAQUE_ACTIVO_HASTA) {
+                velocidadX += (ataqueMiraDerecha ? 1f : -1f) * VELOCIDAD_IMPULSO;
+            }
+        } else if (direccion != 0f) {
+            velocidadX = direccion * VELOCIDAD_CAMINAR;
+            miraDerecha = direccion > 0f;
         }
 
         // Moverse usando la velocidad y el tiempo de este frame.
@@ -139,26 +230,95 @@ public class Jugador {
             || Gdx.input.isKeyJustPressed(Input.Keys.UP);
 
         // Solo se puede saltar si esta en el suelo y no esta atacando.
-        if (sePulsoSalto && estaEnElSuelo && !estaAtacando) {
+        if (sePulsoSalto && estaEnElSuelo && !estaAtacando && !estaProtegiendo) {
             velocidadY = FUERZA_SALTO;
             estaEnElSuelo = false;
             tiempoAnimacion = 0f;
+            sonidoSalto.play();
+        }
+    }
+
+    // Escudo: tocar E = bloqueo corto. Mantener E = bloqueo largo.
+    // Los primeros instantes son un "parry": si el golpe llega justo ahi, aturde al enemigo.
+    private void actualizarEscudo(float delta) {
+        if (cooldownEscudo > 0f) {
+            cooldownEscudo = Math.max(0f, cooldownEscudo - delta);
+        }
+
+        boolean mantiene = Gdx.input.isKeyPressed(Input.Keys.E)
+            || Gdx.input.isButtonPressed(Input.Buttons.RIGHT);
+
+        if (estaProtegiendo) {
+            tiempoEscudo = tiempoEscudo + delta;
+            boolean terminoAnimacion = tiempoEscudo >= escudo.getAnimationDuration();
+            boolean soltoElBoton = !mantiene && tiempoEscudo >= DURACION_MINIMA_ESCUDO;
+            if (terminoAnimacion || soltoElBoton) {
+                estaProtegiendo = false;
+                tiempoEscudo = 0f;
+                cooldownEscudo = COOLDOWN_ESCUDO;
+            }
+            return;
+        }
+
+        boolean inicioEscudo = Gdx.input.isKeyJustPressed(Input.Keys.E)
+            || Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT);
+        // Solo se puede cancelar un ataque con el escudo cuando ya esta en recuperacion.
+        boolean puedeCancelarAtaque = !estaAtacando || tiempoAtaque >= ATAQUE_ACTIVO_HASTA;
+        if (inicioEscudo && cooldownEscudo <= 0f && puedeCancelarAtaque) {
+            boolean izquierda = Gdx.input.isKeyPressed(Input.Keys.A);
+            boolean derecha = Gdx.input.isKeyPressed(Input.Keys.D);
+            if (izquierda != derecha) {
+                miraDerecha = derecha;
+            }
+            estaProtegiendo = true;
+            escudoMiraDerecha = miraDerecha;
+            tiempoEscudo = 0f;
+            estaAtacando = false;
+            tiempoAtaque = 0f;
+            bufferAtaque = 0f;
         }
     }
 
     // Aplicar la gravedad y detectar cuando Jorge vuelve al suelo.
-    private void aplicarGravedad(float delta, float posicionDelSuelo) {
-        // La velocidad vertical disminuye por la gravedad.
+    private void aplicarGravedad(float delta, float posicionDelSuelo, List<Rectangle> plataformas) {
+        float posicionAnteriorY = y;
         velocidadY = velocidadY - GRAVEDAD * delta;
-
-        // Cambiar la posicion vertical.
         y = y + velocidadY * delta;
 
-        // Si bajo del suelo, volver a colocarlo exactamente sobre el suelo.
+        if (velocidadY <= 0f) {
+            float jugadorIzquierda = x + 40f;
+            float jugadorDerecha = x + ANCHO_PERSONAJE - 40f;
+            for (Rectangle plataforma : plataformas) {
+                float alturaPlataforma = plataforma.y + plataforma.height;
+                boolean cruzaPlataforma = posicionAnteriorY >= alturaPlataforma
+                    && y <= alturaPlataforma;
+                boolean estaSobrePlataforma = jugadorDerecha > plataforma.x
+                    && jugadorIzquierda < plataforma.x + plataforma.width;
+                if (cruzaPlataforma && estaSobrePlataforma) {
+                    y = alturaPlataforma;
+                    velocidadY = 0f;
+                    estaEnElSuelo = true;
+                    return;
+                }
+            }
+        }
+
         if (y <= posicionDelSuelo) {
             y = posicionDelSuelo;
             velocidadY = 0f;
             estaEnElSuelo = true;
+        }
+    }
+
+    // Empuje por golpes: mueve a Jorge y se apaga rapido.
+    private void aplicarEmpuje(float delta) {
+        if (velocidadEmpujeX == 0f) {
+            return;
+        }
+        x = x + velocidadEmpujeX * delta;
+        velocidadEmpujeX = velocidadEmpujeX * Math.max(0f, 1f - 9f * delta);
+        if (Math.abs(velocidadEmpujeX) < 5f) {
+            velocidadEmpujeX = 0f;
         }
     }
 
@@ -167,25 +327,107 @@ public class Jugador {
         boolean sePulsoAtaque = Gdx.input.isKeyJustPressed(Input.Keys.SPACE)
             || Gdx.input.isButtonJustPressed(Input.Buttons.LEFT);
 
-        // Comenzar un ataque solamente si no hay otro ataque activo.
-        if (sePulsoAtaque && !estaAtacando) {
-            estaAtacando = true;
-            tiempoAtaque = 0f;
-            tiempoAnimacion = 0f;
+        if (sePulsoAtaque && !estaProtegiendo) {
+            if (!estaAtacando) {
+                iniciarAtaque();
+            } else {
+                // Ya esta atacando: guardar la pulsacion para encadenar el siguiente golpe.
+                bufferAtaque = VENTANA_BUFFER;
+            }
         }
 
-        // Si esta atacando, contar el tiempo transcurrido.
         if (estaAtacando) {
+            // Contar el tiempo transcurrido.
             tiempoAtaque = tiempoAtaque + delta;
-        }
+            bufferAtaque = Math.max(0f, bufferAtaque - delta);
 
-        // Terminar el ataque cuando pasa su duracion.
-        if (tiempoAtaque >= DURACION_ATAQUE) {
-            estaAtacando = false;
-            tiempoAtaque = 0f;
-            tiempoAnimacion = 0f;
+            // Encadenar el siguiente golpe en cuanto se puede cancelar la recuperacion.
+            if (bufferAtaque > 0f && tiempoAtaque >= INICIO_CANCELACION) {
+                iniciarAtaque();
+                return;
+            }
+
+            // Terminar el ataque cuando pasa su duracion.
+            if (tiempoAtaque >= DURACION_ATAQUE) {
+                estaAtacando = false;
+                tiempoAtaque = 0f;
+                tiempoAnimacion = 0f;
+                tiempoSinAtacar = 0f;
+            }
+        } else {
+            tiempoSinAtacar = tiempoSinAtacar + delta;
+            if (tiempoSinAtacar > VENTANA_COMBO) {
+                comboActual = 0;
+            }
         }
     }
+
+    // Empezar un tajo nuevo (o encadenar uno).
+    private void iniciarAtaque() {
+        boolean encadena = estaAtacando || (comboActual > 0 && tiempoSinAtacar <= VENTANA_COMBO);
+        comboActual = encadena ? (comboActual % 3) + 1 : 1;
+
+        // Al empezar el tajo se puede elegir hacia donde apuntar con A/D.
+        boolean izquierda = Gdx.input.isKeyPressed(Input.Keys.A);
+        boolean derecha = Gdx.input.isKeyPressed(Input.Keys.D);
+        if (izquierda && !derecha) {
+            miraDerecha = false;
+        } else if (derecha && !izquierda) {
+            miraDerecha = true;
+        }
+        ataqueMiraDerecha = miraDerecha;
+
+        estaAtacando = true;
+        tiempoAtaque = 0f;
+        bufferAtaque = 0f;
+        numeroAtaque++;
+        tiempoAnimacion = 0f;
+        sonidoAtaque.play();
+    }
+
+    // --- Daño y defensa ---
+
+    // Jorge recibe un golpe sin defensa. direccionEmpuje: 1 = lo empuja a la derecha, -1 a la izquierda.
+    public void recibirImpacto(float direccionEmpuje) {
+        tiempoInvulnerable = DURACION_INVULNERABLE;
+        tiempoAturdido = DURACION_ATURDIMIENTO;
+        velocidadEmpujeX = direccionEmpuje * EMPUJE_AL_RECIBIR_DANIO;
+
+        // El golpe interrumpe lo que estaba haciendo.
+        estaAtacando = false;
+        tiempoAtaque = 0f;
+        bufferAtaque = 0f;
+        estaProtegiendo = false;
+        tiempoEscudo = 0f;
+        comboActual = 0;
+    }
+
+    // Jorge bloqueo un golpe con el escudo: retrocede un poco pero no pierde vida.
+    public void bloquearGolpe(float direccionEmpuje) {
+        velocidadEmpujeX = direccionEmpuje * EMPUJE_AL_BLOQUEAR;
+    }
+
+    // El escudo solo protege de lo que viene de frente.
+    public boolean bloqueaGolpeDesde(float centroEnemigoX) {
+        if (!estaProtegiendo) {
+            return false;
+        }
+        float centroJugadorX = x + ANCHO_PERSONAJE / 2f;
+        if (miraDerecha) {
+            return centroEnemigoX >= centroJugadorX - 20f;
+        }
+        return centroEnemigoX <= centroJugadorX + 20f;
+    }
+
+    public boolean estaEnVentanaParry() {
+        return estaProtegiendo && tiempoEscudo <= VENTANA_PARRY;
+    }
+
+    public boolean esInvulnerable() {
+        return tiempoInvulnerable > 0f;
+    }
+
+    // --- Consultas ---
 
     public float getX() {
         return x;
@@ -195,8 +437,36 @@ public class Jugador {
         return y;
     }
 
+    public float getCentroX() {
+        return x + ANCHO_PERSONAJE / 2f;
+    }
+
     public boolean estaAtacando() {
         return estaAtacando;
+    }
+
+    // true solo durante los frames en los que la espada realmente corta.
+    public boolean estaAtaqueActivo() {
+        return estaAtacando
+            && tiempoAtaque >= ATAQUE_ACTIVO_DESDE
+            && tiempoAtaque <= ATAQUE_ACTIVO_HASTA;
+    }
+
+    public long getNumeroAtaque() {
+        return numeroAtaque;
+    }
+
+    public int getComboActual() {
+        return comboActual;
+    }
+
+    // 1 si el tajo actual va hacia la derecha, -1 si va hacia la izquierda.
+    public float getDireccionAtaque() {
+        return ataqueMiraDerecha ? 1f : -1f;
+    }
+
+    public boolean estaProtegiendo() {
+        return estaProtegiendo;
     }
 
     public boolean miraDerecha() {
@@ -204,17 +474,16 @@ public class Jugador {
     }
 
     public com.badlogic.gdx.math.Rectangle getHitbox() {
-        float ancho = ANCHO_PERSONAJE * ESCALA_NORMAL;
-        float alto = ALTO_PERSONAJE * ESCALA_NORMAL;
-        float xHitbox = x - (ancho - ANCHO_PERSONAJE) / 2f;
-        float yHitbox = y - 30f / 256f * alto;
-        return new com.badlogic.gdx.math.Rectangle(xHitbox, yHitbox, ancho, alto);
+        return new com.badlogic.gdx.math.Rectangle(x + 55f, y + 5f, 70f, 115f);
     }
 
+    // El area se mide desde el centro de Jorge, igual de larga hacia los dos lados.
     public com.badlogic.gdx.math.Rectangle getAreaDeAtaque() {
-        float ancho = 95f;
+        float ancho = 130f;
         float alto = 100f;
-        float xAtaque = miraDerecha ? x + 80f : x - ancho - 20f;
+        boolean haciaDerecha = estaAtacando ? ataqueMiraDerecha : miraDerecha;
+        float centro = x + ANCHO_PERSONAJE / 2f;
+        float xAtaque = haciaDerecha ? centro + 20f : centro - 20f - ancho;
         float yAtaque = y + 25f;
         return new com.badlogic.gdx.math.Rectangle(xAtaque, yAtaque, ancho, alto);
     }
@@ -239,42 +508,46 @@ public class Jugador {
         // Obtener la imagen que corresponde al estado actual.
         TextureRegion imagenActual = obtenerImagenActual();
 
-        // Elegir el tamaño segun la accion.
-        float escalaActual = ESCALA_NORMAL;
-        if (!estaEnElSuelo) {
-            escalaActual = ESCALA_SALTO;
-        }
-        if (estaAtacando) {
-            escalaActual = ESCALA_ATAQUE;
-        }
-
-        // Calcular el tamaño final de la imagen.
-        float ancho = ANCHO_PERSONAJE * escalaActual;
-        float alto = ALTO_PERSONAJE * escalaActual;
-
-        // Centrar los sprites que tienen diferente espacio transparente.
-        float posicionX = x - desplazamientoX - (ancho - ANCHO_PERSONAJE) / 2f;
-
-        // Corregir el espacio transparente que queda debajo de algunos sprites.
-        float espacioInferior = 30f;
-        if (!estaEnElSuelo) {
-            espacioInferior = 57f;
-        }
-        if (estaAtacando) {
-            espacioInferior = 56f;
+        float escala = ALTO_VISIBLE_PERSONAJE / imagenActual.getRegionHeight();
+        float ancho = imagenActual.getRegionWidth() * escala;
+        float alto = ALTO_VISIBLE_PERSONAJE;
+        float posicionX = x - desplazamientoX + (ANCHO_PERSONAJE - ancho) / 2f;
+        float posicionY = y;
+        boolean voltearEscudo = estaProtegiendo && !escudoMiraDerecha;
+        if (voltearEscudo) {
+            posicionX += ancho;
         }
 
-        float posicionY = y - espacioInferior / 256f * alto;
-
-        // Dibujar la imagen en pantalla.
-        batch.draw(imagenActual, posicionX, posicionY, ancho, alto);
+        // Colores de aviso: rojo al ser golpeado, parpadeo al ser invulnerable,
+        // celeste mientras el parry esta activo.
+        float rojo = 1f;
+        float verde = 1f;
+        float azul = 1f;
+        float alfa = 1f;
+        if (tiempoAturdido > 0f) {
+            verde = 0.45f;
+            azul = 0.45f;
+        } else if (estaEnVentanaParry()) {
+            rojo = 0.65f;
+            verde = 0.9f;
+        }
+        if (tiempoInvulnerable > 0f && ((int) (tiempoInvulnerable * 20f)) % 2 == 0) {
+            alfa = 0.35f;
+        }
+        batch.setColor(rojo, verde, azul, alfa);
+        batch.draw(imagenActual, posicionX, posicionY, voltearEscudo ? -ancho : ancho, alto);
+        batch.setColor(1f, 1f, 1f, 1f);
     }
 
     // Elegir una imagen segun la accion y la direccion.
     private TextureRegion obtenerImagenActual() {
-        // Si esta atacando, devolver la animacion de ataque.
+        if (estaProtegiendo) {
+            return escudo.getKeyFrame(tiempoEscudo, false);
+        }
+
+        // Si esta atacando, devolver la animacion de ataque (siempre hacia donde empezo el tajo).
         if (estaAtacando) {
-            if (miraDerecha) {
+            if (ataqueMiraDerecha) {
                 return ataqueDerecha.getKeyFrame(tiempoAtaque, false);
             }
             return ataqueIzquierda.getKeyFrame(tiempoAtaque, false);
@@ -303,7 +576,7 @@ public class Jugador {
         return caminarIzquierda.getKeyFrame(0f);
     }
 
-    // Cargar las seis animaciones de Jorge.
+    // Cargar las animaciones de Jorge.
     private void cargarTodasLasAnimaciones() {
         caminarDerecha = cargarAnimacion("caminar_derecha", 10, 0.08f);
         caminarIzquierda = cargarAnimacion("caminar_izquierda", 10, 0.08f);
@@ -311,6 +584,7 @@ public class Jugador {
         saltoIzquierda = cargarAnimacion("salto_izquierda", 13, 0.10f);
         ataqueDerecha = cargarAnimacion("ataque_derecha", 12, 0.07f);
         ataqueIzquierda = cargarAnimacion("ataque_izquierda", 12, 0.07f);
+        escudo = cargarAnimacion("escudo", 8, 0.12f);
     }
 
     // Cargar una animacion desde una carpeta.
@@ -333,7 +607,7 @@ public class Jugador {
 
             Texture imagen = new Texture(Gdx.files.internal(nombreDelArchivo));
             imagenes.add(imagen);
-            frames[numero] = new TextureRegion(imagen);
+            frames[numero] = SpriteFrameUtils.recortarTransparencia(imagen, nombreDelArchivo);
         }
 
         // Crear y devolver la animacion.
@@ -344,6 +618,12 @@ public class Jugador {
     public void dispose() {
         for (Texture imagen : imagenes) {
             imagen.dispose();
+        }
+        if (sonidoSalto != null) {
+            sonidoSalto.dispose();
+        }
+        if (sonidoAtaque != null) {
+            sonidoAtaque.dispose();
         }
     }
 }
