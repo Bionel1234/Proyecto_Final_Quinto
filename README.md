@@ -37,7 +37,7 @@ Para poder importar, compilar y ejecutar este proyecto localmente se necesita:
 ## Cómo Ejecutar el Juego
 
 1. Clonar este repositorio en tu computadora usando el siguiente comando en la terminal:
-   git clone https://github.com/Bionel1234/JorgeElUltimoGladiador.git
+   git clone https://github.com/Bionel1234/Proyecto_Final_Quinto.git
 
 2. Abrir el entorno de desarrollo (IDE) e importar el proyecto:
    * En **Eclipse**: Ir a `File` > `Import` > `Gradle` > `Existing Gradle Project`, seleccionar la carpeta raíz del repositorio y presionar `Finish`.

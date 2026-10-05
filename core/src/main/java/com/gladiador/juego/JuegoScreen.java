@@ -135,8 +135,20 @@ public class JuegoScreen implements Screen {
         }
 
         if (puedeEntrarAlMapa) {
-            fuente.draw(game.batch, "Pulsa ENTER para entrar al Mapa 1", 420f, 650f);
-            if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+            if (game.isZona1Completada()) {
+                String destinoColiseo = game.isBestiarioDerrotado()
+                    ? "Pulsa ENTER para volver al Coliseo: El Bestiario"
+                    : "Pulsa ENTER para ir al Coliseo: El Bestiario";
+                fuente.draw(game.batch, destinoColiseo, 420f, 650f);
+            } else {
+                fuente.draw(game.batch, "Pulsa ENTER para entrar al Mapa 1", 420f, 650f);
+            }
+            if (game.isZona1Completada() && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+                game.setScreen(new ColiseoScreen(game));
+                game.batch.end();
+                return;
+            }
+            if (!game.isZona1Completada() && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
                 game.setScreen(new MapaScreen(game));
                 game.batch.end();
                 return;

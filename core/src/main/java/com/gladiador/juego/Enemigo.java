@@ -18,6 +18,7 @@ public class Enemigo {
     private static final float ALTO_VISIBLE_ENEMIGO = 130f;
     private static final float VELOCIDAD_BASE = 90f;
     private static final float RANGO_VISION = 420f;
+    private static final float SEPARACION_OBJETIVOS = 110f;
     // Distancia (centro a centro) desde la que empieza a atacar. Tiene que ser menor
     // que lo que realmente alcanza su golpe (unos 170) para que no ataque al aire.
     private static final float RANGO_ATAQUE = 165f;
@@ -67,6 +68,8 @@ public class Enemigo {
     private boolean preparandoAtaque = false;
     private float esperaAtaque = 0f;
     private float tiempoAturdido = 0f;
+    private float tiempoEvasionChoque = 0f;
+    private float direccionEvasionChoque = 0f;
     private float tiempoDanio = 0f;
     private float velocidadEmpujeX = 0f;
     private float tiempoMuerte = 0f;
@@ -89,6 +92,17 @@ public class Enemigo {
     }
 
     public void actualizar(float delta, float objetivoX, float objetivoY, float limiteIzquierdo, float limiteDerecho) {
+        actualizar(delta, objetivoX, objetivoY, limiteIzquierdo, limiteDerecho, 0f);
+    }
+
+    public void actualizar(
+        float delta,
+        float objetivoX,
+        float objetivoY,
+        float limiteIzquierdo,
+        float limiteDerecho,
+        float desplazamientoObjetivoX
+    ) {
         patrolMinX = limiteIzquierdo + 60f;
         patrolMaxX = Math.max(patrolMinX, limiteDerecho - ANCHO_ENEMIGO);
 
@@ -104,6 +118,15 @@ public class Enemigo {
             tiempoDanio = Math.max(0f, tiempoDanio - delta);
         }
 
+        if (tiempoEvasionChoque > 0f) {
+            float tiempoMovimiento = Math.min(delta, tiempoEvasionChoque);
+            x += direccionEvasionChoque * velocidad * 1.35f * tiempoMovimiento;
+            limitarX();
+            tiempoEvasionChoque = Math.max(0f, tiempoEvasionChoque - delta);
+            tiempoAnimacion += delta;
+            return;
+        }
+
         // Aturdido: no hace nada hasta recuperarse.
         if (tiempoAturdido > 0f) {
             tiempoAturdido = Math.max(0f, tiempoAturdido - delta);
@@ -114,7 +137,7 @@ public class Enemigo {
             cooldownAtaque = Math.max(0f, cooldownAtaque - delta);
         }
         float centroEnemigoX = x + ANCHO_ENEMIGO / 2f;
-        float centroObjetivoX = objetivoX + 90f;
+        float centroObjetivoX = objetivoX + 90f + desplazamientoObjetivoX;
         float distanciaHorizontal = centroObjetivoX - centroEnemigoX;
         float distanciaVertical = objetivoY - y;
         boolean enVision = Math.abs(distanciaHorizontal) <= RANGO_VISION
@@ -221,7 +244,22 @@ public class Enemigo {
         x = Math.max(patrolMinX, Math.min(x, patrolMaxX));
     }
 
-    // Se usa para que los enemigos no se amontonen en el mismo lugar.
+    public void reaccionarAlChoque(float direccion) {
+        if (!estaVivo() || direccion == 0f || tiempoEvasionChoque > 0f) {
+            return;
+        }
+        cancelarAtaque();
+        tiempoEvasionChoque = 0.55f;
+        direccionEvasionChoque = Math.signum(direccion);
+        miraDerecha = direccionEvasionChoque > 0f;
+        tiempoAnimacion = 0f;
+    }
+
+    public static float separacionObjetivos() {
+        return SEPARACION_OBJETIVOS;
+    }
+
+    // Se usa para corregir la superposicion cuando dos enemigos chocan.
     public void aplicarSeparacion(float desplazamientoX) {
         x += desplazamientoX;
         limitarX();

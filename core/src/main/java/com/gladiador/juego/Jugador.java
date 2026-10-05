@@ -42,6 +42,8 @@ public class Jugador {
     private Sound sonidoSalto;
     private Sound sonidoAtaque;
     private Sound sonidoEscudo;
+    private Sound sonidoCaminar;
+    private long idSonidoCaminar = -1L;
 
     // Posicion horizontal de Jorge.
     private float x;
@@ -88,6 +90,7 @@ public class Jugador {
 
     // Empuje horizontal por golpes recibidos (se va apagando solo).
     private float velocidadEmpujeX = 0f;
+    private float escalaVisual = 1f;
 
     // Velocidad con la que Jorge camina.
     private static final float VELOCIDAD_CAMINAR = 260f;
@@ -133,6 +136,7 @@ public class Jugador {
         sonidoSalto = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_salto.mp3"));
         sonidoAtaque = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_ataque.mp3"));
         sonidoEscudo = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_escudo.mp3"));
+        sonidoCaminar = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_caminar.mp3"));
     }
 
     // Este metodo se llama una vez por cada imagen del juego.
@@ -178,6 +182,28 @@ public class Jugador {
 
         // Evitar que Jorge salga por los lados del mundo.
         limitarPosicionHorizontal(limiteMaximoX);
+        actualizarSonidoCaminar();
+    }
+
+    private void actualizarSonidoCaminar() {
+        boolean caminando = estaEnElSuelo
+            && tiempoAturdido <= 0f
+            && !estaProtegiendo
+            && (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.D))
+            && Math.abs(velocidadX) > 1f;
+        if (caminando && idSonidoCaminar < 0L) {
+            idSonidoCaminar = sonidoCaminar.loop(0.22f);
+        } else if (!caminando && idSonidoCaminar >= 0L) {
+            sonidoCaminar.stop(idSonidoCaminar);
+            idSonidoCaminar = -1L;
+        }
+    }
+
+    public void setEscalaVisual(float escala) {
+        if (escala <= 0f || Float.isNaN(escala) || Float.isInfinite(escala)) {
+            throw new IllegalArgumentException("La escala visual debe ser un numero positivo.");
+        }
+        escalaVisual = escala;
     }
 
     // Leer las teclas A, D, W y flecha arriba.
@@ -429,17 +455,24 @@ public class Jugador {
     }
 
     public com.badlogic.gdx.math.Rectangle getHitbox() {
-        return new com.badlogic.gdx.math.Rectangle(x + 55f, y + 5f, 70f, 115f);
+        float ancho = 70f * escalaVisual;
+        float alto = 115f * escalaVisual;
+        return new com.badlogic.gdx.math.Rectangle(
+            x + (ANCHO_PERSONAJE - ancho) / 2f,
+            y + 5f,
+            ancho,
+            alto
+        );
     }
 
     // El area se mide desde el centro de Jorge, igual de larga hacia los dos lados.
     public com.badlogic.gdx.math.Rectangle getAreaDeAtaque() {
-        float ancho = 130f;
-        float alto = 100f;
+        float ancho = 130f * escalaVisual;
+        float alto = 100f * escalaVisual;
         boolean haciaDerecha = estaAtacando ? ataqueMiraDerecha : miraDerecha;
         float centro = x + ANCHO_PERSONAJE / 2f;
-        float xAtaque = haciaDerecha ? centro + 20f : centro - 20f - ancho;
-        float yAtaque = y + 25f;
+        float xAtaque = haciaDerecha ? centro + 20f * escalaVisual : centro - 20f * escalaVisual - ancho;
+        float yAtaque = y + 25f * escalaVisual;
         return new com.badlogic.gdx.math.Rectangle(xAtaque, yAtaque, ancho, alto);
     }
 
@@ -463,9 +496,9 @@ public class Jugador {
         // Obtener la imagen que corresponde al estado actual.
         TextureRegion imagenActual = obtenerImagenActual();
 
-        float escala = ALTO_VISIBLE_PERSONAJE / imagenActual.getRegionHeight();
+        float escala = ALTO_VISIBLE_PERSONAJE * escalaVisual / imagenActual.getRegionHeight();
         float ancho = imagenActual.getRegionWidth() * escala;
-        float alto = ALTO_VISIBLE_PERSONAJE;
+        float alto = ALTO_VISIBLE_PERSONAJE * escalaVisual;
         float posicionX = x - desplazamientoX + (ANCHO_PERSONAJE - ancho) / 2f;
         float posicionY = y;
         boolean voltearEscudo = estaProtegiendo && !escudoMiraDerecha;
@@ -571,6 +604,13 @@ public class Jugador {
 
     // Liberar todas las imagenes cuando se cierra la pantalla.
     public void dispose() {
+        if (sonidoCaminar != null) {
+            if (idSonidoCaminar >= 0L) {
+                sonidoCaminar.stop(idSonidoCaminar);
+                idSonidoCaminar = -1L;
+            }
+            sonidoCaminar.dispose();
+        }
         for (Texture imagen : imagenes) {
             imagen.dispose();
         }

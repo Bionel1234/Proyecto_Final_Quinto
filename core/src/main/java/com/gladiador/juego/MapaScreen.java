@@ -111,9 +111,30 @@ public class MapaScreen implements Screen {
 
         float scroll = Math.min(Math.max(0f, jugador.getX() - 180f), ANCHO_MAPA - ANCHO);
 
-        // Los enemigos muertos tambien se actualizan (para desvanecerse).
+        int enemigosVivos = 0;
         for (Enemigo enemigo : enemigos) {
-            enemigo.actualizar(delta, jugador.getX(), jugador.getY(), 0f, ANCHO_MAPA);
+            if (enemigo.estaVivo()) {
+                enemigosVivos++;
+            }
+        }
+
+        // Los enemigos muertos tambien se actualizan (para desvanecerse).
+        int posicionObjetivo = 0;
+        for (Enemigo enemigo : enemigos) {
+            float desplazamientoObjetivoX = 0f;
+            if (enemigo.estaVivo()) {
+                desplazamientoObjetivoX = (posicionObjetivo - (enemigosVivos - 1) / 2f)
+                    * Enemigo.separacionObjetivos();
+                posicionObjetivo++;
+            }
+            enemigo.actualizar(
+                delta,
+                jugador.getX(),
+                jugador.getY(),
+                0f,
+                ANCHO_MAPA,
+                desplazamientoObjetivoX
+            );
         }
         separarEnemigos();
 
@@ -241,6 +262,7 @@ public class MapaScreen implements Screen {
             && jugador.getX() >= ANCHO_MAPA - DISTANCIA_SEGUNDA_PUERTA
             && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
             Monedas.recompensarPrimerMapa();
+            game.registrarZona1Completada();
             game.setScreen(new JuegoScreen(game));
             return;
         }
@@ -260,9 +282,8 @@ public class MapaScreen implements Screen {
         intensidadTemblor = intensidad;
     }
 
-    // Empuja a los enemigos que quedaron uno encima del otro.
+    // Detecta choques reales y manda a cada enemigo en direccion opuesta.
     private void separarEnemigos() {
-        final float distanciaMinima = 110f;
         for (int i = 0; i < enemigos.size(); i++) {
             Enemigo a = enemigos.get(i);
             if (!a.estaVivo()) {
@@ -273,15 +294,24 @@ public class MapaScreen implements Screen {
                 if (!b.estaVivo()) {
                     continue;
                 }
-                float diferencia = b.getCentroX() - a.getCentroX();
-                float distancia = Math.abs(diferencia);
-                if (distancia >= distanciaMinima) {
+                Rectangle hitboxA = a.getHitbox();
+                Rectangle hitboxB = b.getHitbox();
+                if (!hitboxA.overlaps(hitboxB)) {
                     continue;
                 }
-                float direccion = diferencia >= 0f ? 1f : -1f;
-                float empuje = (distanciaMinima - distancia) / 2f;
-                a.aplicarSeparacion(-direccion * empuje);
-                b.aplicarSeparacion(direccion * empuje);
+
+                float diferencia = b.getCentroX() - a.getCentroX();
+                float direccion = diferencia == 0f
+                    ? (a.getX() <= jugador.getX() ? -1f : 1f)
+                    : Math.signum(diferencia);
+                float distanciaMinima = (hitboxA.width + hitboxB.width) / 2f + 2f;
+                float distancia = Math.abs(diferencia);
+                float separacion = Math.max(0f, (distanciaMinima - distancia) / 2f);
+
+                a.aplicarSeparacion(-direccion * separacion);
+                b.aplicarSeparacion(direccion * separacion);
+                a.reaccionarAlChoque(-direccion);
+                b.reaccionarAlChoque(direccion);
             }
         }
     }
