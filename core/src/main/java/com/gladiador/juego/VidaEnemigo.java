@@ -2,24 +2,37 @@ package com.gladiador.juego;
 
 public class VidaEnemigo {
 
-    private static final int VIDA_MAXIMA = 2;
+    private static final int VIDA_MAXIMA_POR_DEFECTO = 2;
 
-    private int vidaActual = VIDA_MAXIMA;
+    private final int vidaMaxima;
+    private int vidaActual;
+
+    public VidaEnemigo() {
+        this(VIDA_MAXIMA_POR_DEFECTO);
+    }
+
+    public VidaEnemigo(int vidaMaxima) {
+        this.vidaMaxima = Math.max(1, vidaMaxima);
+        this.vidaActual = this.vidaMaxima;
+    }
 
     public int getActual() {
         return vidaActual;
     }
 
     public int getMaxima() {
-        return VIDA_MAXIMA;
+        return vidaMaxima;
     }
 
     public void recibirGolpe() {
-        if (vidaActual <= 0) {
+        recibirGolpe(1);
+    }
+
+    public void recibirGolpe(int danio) {
+        if (vidaActual <= 0 || danio <= 0) {
             return;
         }
-
-        vidaActual--;
+        vidaActual = Math.max(0, vidaActual - danio);
     }
 
     public boolean estaVivo() {

@@ -14,27 +14,58 @@ import com.badlogic.gdx.math.MathUtils;
 
 public class Enemigo {
 
+    public enum TipoEnemigo {
+        BASICO(2, 1.10f, 1, 0.18f, 0.42f, 34f, 110f, 170f),
+        AGIL(2, 1.28f, 1, 0.12f, 0.32f, 42f, 120f, 185f),
+        BRUTO(4, 0.94f, 2, 0.20f, 0.48f, 28f, 90f, 160f),
+        ELITE(5, 1.18f, 3, 0.14f, 0.36f, 46f, 130f, 200f);
+
+        private final int vidaMaxima;
+        private final float velocidadMultiplicador;
+        private final int dano;
+        private final float esperaAtaqueMin;
+        private final float esperaAtaqueMax;
+        private final float alturaAtaqueMax;
+        private final float alturaPersecucionMax;
+        private final float rangoAtaque;
+
+        TipoEnemigo(int vidaMaxima, float velocidadMultiplicador, int dano, float esperaAtaqueMin, float esperaAtaqueMax,
+                float alturaAtaqueMax, float alturaPersecucionMax, float rangoAtaque) {
+            this.vidaMaxima = vidaMaxima;
+            this.velocidadMultiplicador = velocidadMultiplicador;
+            this.dano = dano;
+            this.esperaAtaqueMin = esperaAtaqueMin;
+            this.esperaAtaqueMax = esperaAtaqueMax;
+            this.alturaAtaqueMax = alturaAtaqueMax;
+            this.alturaPersecucionMax = alturaPersecucionMax;
+            this.rangoAtaque = rangoAtaque;
+        }
+
+        public int getVidaMaxima() { return vidaMaxima; }
+        public float getVelocidadMultiplicador() { return velocidadMultiplicador; }
+        public int getDano() { return dano; }
+        public float getEsperaAtaqueMin() { return esperaAtaqueMin; }
+        public float getEsperaAtaqueMax() { return esperaAtaqueMax; }
+        public float getAlturaAtaqueMax() { return alturaAtaqueMax; }
+        public float getAlturaPersecucionMax() { return alturaPersecucionMax; }
+        public float getRangoAtaque() { return rangoAtaque; }
+    }
+
     private static final float ANCHO_ENEMIGO = 220f;
     private static final float ALTO_VISIBLE_ENEMIGO = 130f;
-    private static final float VELOCIDAD_BASE = 90f;
-    private static final float RANGO_VISION = 420f;
+    private static final float VELOCIDAD_BASE = 105f;
+    private static final float RANGO_VISION = 540f;
     private static final float SEPARACION_OBJETIVOS = 110f;
     // Distancia (centro a centro) desde la que empieza a atacar. Tiene que ser menor
     // que lo que realmente alcanza su golpe (unos 170) para que no ataque al aire.
-    private static final float RANGO_ATAQUE = 165f;
-    private static final float DISTANCIA_OBJETIVO = 145f;
+    private static final float DISTANCIA_OBJETIVO = 120f;
     // Si Jorge se pega demasiado mientras el enemigo recarga, el enemigo retrocede.
-    private static final float DISTANCIA_RETROCESO = 115f;
-    private static final float TOLERANCIA_ALTURA_ATAQUE = 100f;
-    private static final float TOLERANCIA_ALTURA_PERSECUCION = 100f;
-    private static final float COOLDOWN_ATAQUE = 1.2f;
-    // Pausa antes de atacar (aleatoria) para que no sea siempre el mismo ritmo.
-    private static final float ESPERA_ATAQUE_MIN = 0.25f;
-    private static final float ESPERA_ATAQUE_MAX = 0.60f;
+    private static final float DISTANCIA_RETROCESO = 90f;
+    private static final float COOLDOWN_ATAQUE = 0.85f;
     private static final float DURACION_ANIMACION_ATAQUE = 15 * 0.07f;
     // El golpe hace daño durante una pequeña ventana (2 frames), no en un solo instante.
-    private static final float MOMENTO_IMPACTO = 0.49f;
-    private static final float VENTANA_IMPACTO = 0.14f;
+    private static final float MOMENTO_IMPACTO = 0.34f;
+    private static final float VENTANA_IMPACTO = 0.18f;
     private static final float DURACION_ATURDIMIENTO_GOLPE = 0.35f;
     private static final float DURACION_MUERTE = 0.50f;
     private static final float HITBOX_ANCHO = 70f;
@@ -48,7 +79,15 @@ public class Enemigo {
     private final Animation<TextureRegion> atacarIzquierda;
     private final ArrayList<Texture> imagenes = new ArrayList<>();
     private final Map<TextureRegion, LimitesSprite> limitesSprites = new IdentityHashMap<>();
-    private final VidaEnemigo vida = new VidaEnemigo();
+    private final TipoEnemigo tipo;
+    private final String zona;
+    private final VidaEnemigo vida;
+    private final int dano;
+    private final float esperaAtaqueMin;
+    private final float esperaAtaqueMax;
+    private final float alturaAtaqueMax;
+    private final float alturaPersecucionMax;
+    private final float rangoAtaque;
 
     private float x;
     private float y;
@@ -75,20 +114,44 @@ public class Enemigo {
     private float tiempoMuerte = 0f;
 
     public Enemigo(float x, float y) {
-        this(x, y, VELOCIDAD_BASE);
+        this(x, y, VELOCIDAD_BASE, TipoEnemigo.BASICO, "Zona 1");
     }
 
     public Enemigo(float x, float y, float velocidad) {
+        this(x, y, velocidad, TipoEnemigo.BASICO, "Zona 1");
+    }
+
+    public Enemigo(float x, float y, float velocidad, TipoEnemigo tipo) {
+        this(x, y, velocidad, tipo, "Zona 1");
+    }
+
+    public Enemigo(float x, float y, float velocidad, TipoEnemigo tipo, String zona) {
+        this.tipo = tipo;
+        this.zona = zona == null || zona.isEmpty() ? "Zona 1" : zona;
+        this.vida = new VidaEnemigo(tipo.getVidaMaxima());
+        this.dano = tipo.getDano();
+        this.esperaAtaqueMin = tipo.getEsperaAtaqueMin();
+        this.esperaAtaqueMax = tipo.getEsperaAtaqueMax();
+        this.alturaAtaqueMax = tipo.getAlturaAtaqueMax();
+        this.alturaPersecucionMax = tipo.getAlturaPersecucionMax();
+        this.rangoAtaque = tipo.getRangoAtaque();
         this.x = x;
         this.y = y;
-        this.velocidad = velocidad;
+        this.velocidad = velocidad * tipo.getVelocidadMultiplicador();
         this.patrolMinX = 0f;
         this.patrolMaxX = Float.MAX_VALUE;
 
-        caminarDerecha = cargarAnimacion("Enemigo 1 movimientos/Caminar derecha", 10, 0.08f);
-        caminarIzquierda = cargarAnimacion("Enemigo 1 movimientos/Caminar izquierda sin fondo", 10, 0.08f);
-        atacarDerecha = cargarAnimacion("Enemigo 1 movimientos/Atacar derecha", 15, 0.07f);
-        atacarIzquierda = cargarAnimacion("Enemigo 1 movimientos/Atacar izquierda", 15, 0.07f);
+        if ("Zona 1".equals(this.zona)) {
+            caminarDerecha = cargarAnimacion("Enemigo 1 movimientos/Caminar derecha", 10, 0.08f);
+            caminarIzquierda = cargarAnimacion("Enemigo 1 movimientos/Caminar izquierda sin fondo", 10, 0.08f);
+            atacarDerecha = cargarAnimacion("Enemigo 1 movimientos/Atacar derecha", 15, 0.07f);
+            atacarIzquierda = cargarAnimacion("Enemigo 1 movimientos/Atacar izquierda", 15, 0.07f);
+        } else {
+            caminarDerecha = cargarAnimacion("Enemigo1 zona2 movimientos/caminar derecha", 11, 0.08f);
+            caminarIzquierda = cargarAnimacion("Enemigo1 zona2 movimientos/caminar izquierda", 11, 0.08f);
+            atacarDerecha = cargarAnimacion("Enemigo1 zona2 movimientos/atacando derecha", 13, 0.07f);
+            atacarIzquierda = cargarAnimacion("Enemigo1 zona2 movimientos/atacando izquierda", 13, 0.07f);
+        }
     }
 
     public void actualizar(float delta, float objetivoX, float objetivoY, float limiteIzquierdo, float limiteDerecho) {
@@ -140,8 +203,7 @@ public class Enemigo {
         float centroObjetivoX = objetivoX + 90f + desplazamientoObjetivoX;
         float distanciaHorizontal = centroObjetivoX - centroEnemigoX;
         float distanciaVertical = objetivoY - y;
-        boolean enVision = Math.abs(distanciaHorizontal) <= RANGO_VISION
-            && Math.abs(distanciaVertical) <= TOLERANCIA_ALTURA_PERSECUCION;
+        boolean enVision = Math.abs(distanciaHorizontal) <= RANGO_VISION && Math.abs(distanciaVertical) <= alturaPersecucionMax;
 
         if (atacando) {
             tiempoAnimacionAtaque += delta;
@@ -149,55 +211,50 @@ public class Enemigo {
                 atacando = false;
                 tiempoAnimacionAtaque = 0f;
                 tiempoAnimacion = 0f;
-                // Cooldown con variacion para que el ritmo no sea predecible.
-                cooldownAtaque = COOLDOWN_ATAQUE * MathUtils.random(0.8f, 1.5f);
+                cooldownAtaque = COOLDOWN_ATAQUE * tipo.getVelocidadMultiplicador() * MathUtils.random(0.8f, 1.35f);
             }
             return;
         }
 
-        if (enVision) {
-            if (distanciaHorizontal != 0f) {
-                miraDerecha = distanciaHorizontal > 0f;
-            }
-
-            boolean enRangoDeAtaque = Math.abs(distanciaVertical) <= TOLERANCIA_ALTURA_ATAQUE
-                && Math.abs(distanciaHorizontal) <= RANGO_ATAQUE;
-            if (enRangoDeAtaque) {
-                if (puedeAtacar()) {
-                    // Se queda mirando a Jorge un momento antes de atacar.
-                    if (!preparandoAtaque) {
-                        preparandoAtaque = true;
-                        esperaAtaque = MathUtils.random(ESPERA_ATAQUE_MIN, ESPERA_ATAQUE_MAX);
-                    }
-                    esperaAtaque -= delta;
-                    if (esperaAtaque <= 0f) {
-                        preparandoAtaque = false;
-                        atacando = true;
-                        impactoResuelto = false;
-                        tiempoAnimacionAtaque = 0f;
-                    }
-                } else if (Math.abs(distanciaHorizontal) < DISTANCIA_RETROCESO) {
-                    // Recargando y Jorge demasiado pegado: dar un paso atras.
-                    x -= Math.signum(distanciaHorizontal) * velocidad * 0.6f * delta;
-                    limitarX();
-                    tiempoAnimacion += delta;
-                }
-                return;
-            }
-
+        if (!enVision) {
             preparandoAtaque = false;
-            float distancia = Math.abs(distanciaHorizontal);
-            if (distancia > DISTANCIA_OBJETIVO) {
-                float distanciaARecorrer = distancia - DISTANCIA_OBJETIVO;
-                float avance = Math.min(velocidad * delta, distanciaARecorrer);
-                x += Math.signum(distanciaHorizontal) * avance;
+            patrullar(delta);
+            return;
+        }
+
+        if (distanciaHorizontal != 0f) {
+            miraDerecha = distanciaHorizontal > 0f;
+        }
+
+        if (Math.abs(distanciaVertical) <= alturaAtaqueMax && Math.abs(distanciaHorizontal) <= rangoAtaque) {
+            if (puedeAtacar()) {
+                if (!preparandoAtaque) {
+                    preparandoAtaque = true;
+                    esperaAtaque = MathUtils.random(esperaAtaqueMin, esperaAtaqueMax);
+                }
+                esperaAtaque -= delta;
+                if (esperaAtaque <= 0f) {
+                    preparandoAtaque = false;
+                    atacando = true;
+                    impactoResuelto = false;
+                    tiempoAnimacionAtaque = 0f;
+                }
+            } else if (Math.abs(distanciaHorizontal) < DISTANCIA_RETROCESO) {
+                x -= Math.signum(distanciaHorizontal) * velocidad * 0.6f * delta;
+                limitarX();
+                tiempoAnimacion += delta;
             }
-            tiempoAnimacion += delta;
             return;
         }
 
         preparandoAtaque = false;
-        patrullar(delta);
+        float distancia = Math.abs(distanciaHorizontal);
+        if (distancia > DISTANCIA_OBJETIVO) {
+            float distanciaARecorrer = distancia - DISTANCIA_OBJETIVO;
+            float avance = Math.min(velocidad * delta, distanciaARecorrer);
+            x += Math.signum(distanciaHorizontal) * avance;
+        }
+        tiempoAnimacion += delta;
     }
 
     private void patrullar(float delta) {
@@ -275,7 +332,7 @@ public class Enemigo {
     }
 
     public boolean estaEnRangoDeAtaque(float objetivoX, float objetivoY) {
-        return estaVivo() && Math.abs(objetivoX - x) <= RANGO_ATAQUE && Math.abs(objetivoY - y) <= 80f;
+        return estaVivo() && Math.abs(objetivoX - x) <= rangoAtaque && Math.abs(objetivoY - y) <= alturaAtaqueMax;
     }
 
     public boolean puedeAtacar() {
@@ -302,6 +359,18 @@ public class Enemigo {
 
     public int getVidaMaxima() {
         return vida.getMaxima();
+    }
+
+    public int getDano() {
+        return dano;
+    }
+
+    public TipoEnemigo getTipo() {
+        return tipo;
+    }
+
+    public float getAlturaAtaqueMax() {
+        return alturaAtaqueMax;
     }
 
     // Devuelve true si el golpe se registro (false si ya lo habia recibido o esta muerto).

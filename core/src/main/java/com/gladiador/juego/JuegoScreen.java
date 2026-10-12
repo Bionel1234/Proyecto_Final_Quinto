@@ -30,6 +30,7 @@ public class JuegoScreen implements Screen {
     private OrthographicCamera camera;
     private Viewport viewport;
     private Texture[] texturasMazmorra;
+    private Texture panelSelector;
     private Animation<TextureRegion> mazmorra;
     private float tiempoMazmorra;
     private Jugador jugador;
@@ -40,6 +41,7 @@ public class JuegoScreen implements Screen {
     private Music musicaLobby;
     private boolean puedeEntrarAlMapa;
     private boolean hablandoConComerciante;
+    private int indiceMapaSeleccionado = 0;
 
     // Recibir la referencia al juego.
     public JuegoScreen(MainClass game) {
@@ -51,6 +53,7 @@ public class JuegoScreen implements Screen {
         // Preparar la vista y cargar todos los objetos.
         configurarCamara();
         cargarMazmorra();
+        panelSelector = new Texture(Gdx.files.internal("menu/controles_fondo.png"));
         jugador = new Jugador((ANCHO - 180f) / 2f, calcularSuelo());
         comerciante = new Comerciante(250f, calcularSuelo() + 1f);
         vida = new Vida();
@@ -62,6 +65,7 @@ public class JuegoScreen implements Screen {
         musicaLobby.play();
         puedeEntrarAlMapa = false;
         hablandoConComerciante = false;
+        indiceMapaSeleccionado = 0;
     }
 
     // Crear una camara 2D que mantiene la proporcion de la pantalla.
@@ -126,30 +130,19 @@ public class JuegoScreen implements Screen {
         monedas.dibujar(game.batch);
 
         if (cercaDelComerciante && !hablandoConComerciante) {
-            fuente.draw(game.batch, "Pulsa F para hablar con el comerciante", 420f, 650f);
+            fuente.draw(game.batch, "Pulsa F para hablar con el mercader", 420f, 650f);
         }
         if (hablandoConComerciante) {
-            fuente.draw(game.batch, "Comerciante: Bienvenido, gladiador.", 430f, 650f);
-            fuente.draw(game.batch, "Pronto tendre mercancia para ti.", 430f, 620f);
-            fuente.draw(game.batch, "Pulsa F para cerrar", 430f, 590f);
+            fuente.draw(game.batch, "Mercader: Bienvenido, gladiador.", 430f, 650f);
+            fuente.draw(game.batch, "Pronto tendré mercancía para ti.", 430f, 620f);
+            fuente.draw(game.batch, "Pulsa F para cerrar el diálogo", 430f, 590f);
         }
 
         if (puedeEntrarAlMapa) {
-            if (game.isZona1Completada()) {
-                String destinoColiseo = game.isBestiarioDerrotado()
-                    ? "Pulsa ENTER para volver al Coliseo: El Bestiario"
-                    : "Pulsa ENTER para ir al Coliseo: El Bestiario";
-                fuente.draw(game.batch, destinoColiseo, 420f, 650f);
-            } else {
-                fuente.draw(game.batch, "Pulsa ENTER para entrar al Mapa 1", 420f, 650f);
-            }
-            if (game.isZona1Completada() && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-                game.setScreen(new ColiseoScreen(game));
-                game.batch.end();
-                return;
-            }
-            if (!game.isZona1Completada() && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-                game.setScreen(new MapaScreen(game));
+            dibujarSelectorMapa();
+            gestionarSeleccionMapa();
+            if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+                entrarEnMapaSeleccionado();
                 game.batch.end();
                 return;
             }
@@ -165,6 +158,73 @@ public class JuegoScreen implements Screen {
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             game.setScreen(new MenuScreen(game));
         }
+    }
+
+    private void dibujarSelectorMapa() {
+        float panelX = 300f;
+        float panelY = 320f;
+        float panelAncho = 760f;
+        float panelAlto = 240f;
+
+        game.batch.setColor(0.07f, 0.09f, 0.14f, 0.86f);
+        game.batch.draw(panelSelector, panelX, panelY, panelAncho, panelAlto);
+        game.batch.setColor(1f, 1f, 1f, 1f);
+
+        fuente.draw(game.batch, "Elige tu próximo combate", panelX + 40f, panelY + 180f);
+        int opciones = obtenerCantidadOpciones();
+        for (int i = 0; i < opciones; i++) {
+            String texto = obtenerTextoOpcion(i);
+            float y = panelY + 130f - i * 56f;
+            if (i == indiceMapaSeleccionado) {
+                fuente.draw(game.batch, "> " + texto, panelX + 50f, y);
+            } else {
+                fuente.draw(game.batch, texto, panelX + 70f, y);
+            }
+        }
+        fuente.draw(game.batch, "Flechas o W/S para cambiar • Enter para entrar", panelX + 40f, panelY + 28f);
+    }
+
+    private void gestionarSeleccionMapa() {
+        if (!puedeEntrarAlMapa) {
+            return;
+        }
+        int opciones = obtenerCantidadOpciones();
+        if (Gdx.input.isKeyJustPressed(Input.Keys.UP) || Gdx.input.isKeyJustPressed(Input.Keys.W)) {
+            indiceMapaSeleccionado = Math.max(0, indiceMapaSeleccionado - 1);
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.DOWN) || Gdx.input.isKeyJustPressed(Input.Keys.S)) {
+            indiceMapaSeleccionado = Math.min(opciones - 1, indiceMapaSeleccionado + 1);
+        }
+    }
+
+    private int obtenerCantidadOpciones() {
+        return game.isZona1Completada() ? 3 : 2;
+    }
+
+    private String obtenerTextoOpcion(int indice) {
+        if (indice == 0) {
+            return "Zona 1: Nivel 1";
+        }
+        if (indice == 1) {
+            return "Zona 2: Nivel 1";
+        }
+        return "Coliseo — El Bestiario";
+    }
+
+    private void entrarEnMapaSeleccionado() {
+        if (!puedeEntrarAlMapa) {
+            return;
+        }
+        int opcion = indiceMapaSeleccionado;
+        if (opcion == 0) {
+            game.setScreen(new MapaScreen(game, "Zona 1", 1));
+            return;
+        }
+        if (opcion == 1) {
+            game.setScreen(new MapaScreen(game, "Zona 2", 1, "Mapa 1/scene_animated.png"));
+            return;
+        }
+        game.setScreen(new ColiseoScreen(game));
     }
 
     // Calcular el suelo usando el primer frame del fondo.
@@ -203,6 +263,7 @@ public class JuegoScreen implements Screen {
         if (texturasMazmorra != null) {
             for (Texture textura : texturasMazmorra) textura.dispose();
         }
+        if (panelSelector != null) panelSelector.dispose();
         if (jugador != null) jugador.dispose();
         if (comerciante != null) comerciante.dispose();
         if (vida != null) vida.dispose();

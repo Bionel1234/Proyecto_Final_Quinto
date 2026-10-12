@@ -27,8 +27,8 @@ allprojects {
 
 configure(subprojects) {
   apply plugin: 'java-library'
-  java.sourceCompatibility = 11
-  java.targetCompatibility = 11
+  java.sourceCompatibility = 17
+  java.targetCompatibility = 17
 
   // From https://lyze.dev/2021/04/29/libGDX-Internal-Assets-List/
   // The article can be helpful when using assets.txt in your project.
@@ -45,7 +45,7 @@ configure(subprojects) {
     // convert it to a relative path
     // and append it to the file assets.txt
     fileTree(assetsFolder).collect { assetsFolder.relativePath(it) }.sort().each {
-     assetsFile.append(it + "\n")
+      assetsFile.append(it + "\n")
     }
   }
   processResources.dependsOn 'generateAssetList'
@@ -57,7 +57,7 @@ configure(subprojects) {
 
 subprojects {
   version = "$projectVersion"
-  ext.appName = 'JorgeElUltimoGladiador'
+  ext.appName = 'JorgeElUltimoGladiador2.0'
   repositories {
     mavenCentral()
     // You may want to remove the following line if you have errors downloading dependencies.
@@ -67,4 +67,4 @@ subprojects {
   }
 }
 
-eclipse.project.name = 'JorgeElUltimoGladiador' + '-parent'
+eclipse.project.name = 'JorgeElUltimoGladiador2.0' + '-parent'

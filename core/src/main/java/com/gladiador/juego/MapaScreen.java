@@ -28,9 +28,12 @@ public class MapaScreen implements Screen {
     private static final float DISTANCIA_MINIMA_APARICION = 450f;
     private static final float DISTANCIA_MINIMA_ENTRE_ENEMIGOS = 230f;
     private static final int CANTIDAD_OLEADAS = 3;
-    private static final int[] ENEMIGOS_POR_OLEADA = {2, 4, 4};
+    private static final int[] ENEMIGOS_POR_OLEADA = {3, 5, 7};
 
     private final MainClass game;
+    private final String nombreZona;
+    private final int numeroNivel;
+    private final String fondoMapaRuta;
     private OrthographicCamera camera;
     private Viewport viewport;
     private Texture fondoMapa;
@@ -53,13 +56,24 @@ public class MapaScreen implements Screen {
     private float tiempoTextoParry;
 
     public MapaScreen(MainClass game) {
+        this(game, "Zona 1", 1, "Mapa 1/scene_animated.png");
+    }
+
+    public MapaScreen(MainClass game, String nombreZona, int numeroNivel) {
+        this(game, nombreZona, numeroNivel, "Mapa 1/scene_animated.png");
+    }
+
+    public MapaScreen(MainClass game, String nombreZona, int numeroNivel, String fondoMapaRuta) {
         this.game = game;
+        this.nombreZona = nombreZona == null || nombreZona.isEmpty() ? "Zona 1" : nombreZona;
+        this.numeroNivel = numeroNivel > 0 ? numeroNivel : 1;
+        this.fondoMapaRuta = fondoMapaRuta == null || fondoMapaRuta.isEmpty() ? "Mapa 1/scene_animated.png" : fondoMapaRuta;
     }
 
     @Override
     public void show() {
         configurarCamara();
-        fondoMapa = new Texture(Gdx.files.internal("Mapa 1/scene_animated.png"));
+        fondoMapa = new Texture(Gdx.files.internal(fondoMapaRuta));
         pantallaGameOver = new Texture(Gdx.files.internal("gameover/pantalla.png"));
         jugador = new Jugador(250f, 150f);
         vida = new Vida();
@@ -155,7 +169,10 @@ public class MapaScreen implements Screen {
 
             // 2) El enemigo golpea: tambien tiene una ventana de impacto.
             //    Si Jorge lo golpeo antes, el golpe del enemigo se cancela solo.
-            if (enemigo.impactoActivo() && enemigo.getAreaDeAtaque().overlaps(hitboxJugador)) {
+            boolean jugadorEnAreaDeAtaque = enemigo.impactoActivo()
+                && enemigo.getAreaDeAtaque().overlaps(hitboxJugador)
+                && Math.abs(jugador.getY() - enemigo.getY()) <= enemigo.getAlturaAtaqueMax() + 18f;
+            if (jugadorEnAreaDeAtaque) {
                 enemigo.resolverImpacto();
                 float empujeAJugador = jugador.getCentroX() >= enemigo.getCentroX() ? 1f : -1f;
                 if (jugador.esInvulnerable()) {
@@ -173,7 +190,7 @@ public class MapaScreen implements Screen {
                         activarTemblor(0.08f, 3f);
                     }
                 } else {
-                    vida.recibirGolpe();
+                    vida.recibirGolpe(enemigo.getDano());
                     jugador.recibirImpacto(empujeAJugador);
                     activarHitstop(0.08f);
                     activarTemblor(0.2f, 8f);
@@ -230,13 +247,13 @@ public class MapaScreen implements Screen {
             enemigo.dibujar(game.batch, scroll);
         }
         vida.dibujar(game.batch);
-        fuente.draw(game.batch, "Zona 1: Las Catacumbas", 80f, 710f);
+        fuente.draw(game.batch, nombreZona + ": Nivel " + numeroNivel, 80f, 710f);
         if (oleadasCompletadas) {
-            fuente.draw(game.batch, "¡Completaste las 3 oleadas!", 750f, 710f);
+            fuente.draw(game.batch, "¡Has superado las 3 oleadas!", 700f, 710f);
             if (jugador.getX() >= ANCHO_MAPA - DISTANCIA_SEGUNDA_PUERTA) {
                 fuente.draw(
                     game.batch,
-                    "Presiona ENTER para volver al lobby",
+                    "Pulsa ENTER para volver al lobby",
                     ANCHO_MAPA - 300f - scroll,
                     245f
                 );
@@ -244,7 +261,7 @@ public class MapaScreen implements Screen {
         } else {
             fuente.draw(
                 game.batch,
-                "Oleada " + oleadaActual + "/" + CANTIDAD_OLEADAS,
+                "Oleada " + oleadaActual + " de " + CANTIDAD_OLEADAS,
                 750f,
                 710f
             );
@@ -262,7 +279,11 @@ public class MapaScreen implements Screen {
             && jugador.getX() >= ANCHO_MAPA - DISTANCIA_SEGUNDA_PUERTA
             && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
             Monedas.recompensarPrimerMapa();
-            game.registrarZona1Completada();
+            if ("Zona 2".equalsIgnoreCase(nombreZona)) {
+                game.registrarZona2Completada();
+            } else {
+                game.registrarZona1Completada();
+            }
             game.setScreen(new JuegoScreen(game));
             return;
         }
@@ -320,10 +341,28 @@ public class MapaScreen implements Screen {
         enemigos.clear();
         int cantidadEnemigos = ENEMIGOS_POR_OLEADA[oleadaActual - 1];
         for (int i = 0; i < cantidadEnemigos; i++) {
-            float x = buscarPosicionAparicion(jugadorX);
-            float velocidad = 80f + MathUtils.random(0f, 20f);
-            enemigos.add(new Enemigo(x, ALTURA_SUELO, velocidad));
+            enemigos.add(crearEnemigo(jugadorX));
         }
+    }
+
+    private Enemigo crearEnemigo(float jugadorX) {
+        float x = buscarPosicionAparicion(jugadorX);
+        float velocidadBase = 80f + MathUtils.random(0f, 24f) + oleadaActual * 4f;
+        return new Enemigo(x, ALTURA_SUELO, velocidadBase, seleccionarTipoEnemigo(), nombreZona);
+    }
+
+    private Enemigo.TipoEnemigo seleccionarTipoEnemigo() {
+        float aleatorio = MathUtils.random();
+        if (oleadaActual >= 3 && aleatorio < 0.18f + (oleadaActual - 1) * 0.10f) {
+            return Enemigo.TipoEnemigo.ELITE;
+        }
+        if (oleadaActual >= 2 && aleatorio < 0.38f + (oleadaActual - 1) * 0.12f) {
+            return Enemigo.TipoEnemigo.BRUTO;
+        }
+        if (aleatorio < 0.25f + oleadaActual * 0.14f) {
+            return Enemigo.TipoEnemigo.AGIL;
+        }
+        return Enemigo.TipoEnemigo.BASICO;
     }
 
     private float buscarPosicionAparicion(float jugadorX) {

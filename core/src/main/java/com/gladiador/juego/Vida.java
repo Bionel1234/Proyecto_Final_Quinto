@@ -36,7 +36,11 @@ public class Vida {
     }
 
     public void recibirGolpe() {
-        salud = Math.max(0, salud - DANIO_POR_GOLPE);
+        recibirGolpe(DANIO_POR_GOLPE);
+    }
+
+    public void recibirGolpe(int danio) {
+        salud = Math.max(0, salud - danio);
     }
 
     public int obtenerSalud() {
