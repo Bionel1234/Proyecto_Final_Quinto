@@ -1,132 +1,69 @@
 package com.gladiador.juego;
 
-import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
+// Barra de vida de Jorge, dibujada arriba a la derecha.
+// Usa cuatro imagenes ya dibujadas: llena, con 2 vidas, con 1 vida y vacia.
 public class Vida {
 
-    private static final int SALUD_MAXIMA = 8;
-    private static final int DANIO_POR_GOLPE = 1;
-    private static final int ANCHO_BARRA = 320;
-    private static final int ALTO_BARRA = 36;
-    private static final int CANTIDAD_SEGMENTOS = 8;
+    private static final int SALUD_MAXIMA = 8;        // puntos de vida internos
+    private static final int VIDAS_VISUALES = 3;      // cuantas "vidas" muestra la barra
+    private static final float ANCHO_BARRA = 430f;    // ancho en pantalla
 
-    private final Texture corazon;
-    private final Texture barra;
-    private int salud = SALUD_MAXIMA;
-    private int saludDibujada = -1;
+    // barras[0] = vacia, barras[1] = 1 vida, barras[2] = 2 vidas, barras[3] = llena.
+    private final Texture[] barras = new Texture[VIDAS_VISUALES + 1];
+    private static int salud = SALUD_MAXIMA;
 
+    // Carga los cuatro dibujos posibles de la barra, desde vacia hasta llena.
     public Vida() {
-        corazon = crearCorazon();
-        barra = new Texture(ANCHO_BARRA, ALTO_BARRA, Pixmap.Format.RGBA8888);
-        barra.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        actualizarBarra();
+        barras[3] = new Texture(Gdx.files.internal("ui/barra_vida_3.png"));
+        barras[2] = new Texture(Gdx.files.internal("ui/barra_vida_2.png"));
+        barras[1] = new Texture(Gdx.files.internal("ui/barra_vida_1.png"));
+        barras[0] = new Texture(Gdx.files.internal("ui/barra_vida_0.png"));
     }
 
+    // Pintar la barra que corresponde a la vida actual.
     public void dibujar(SpriteBatch batch) {
-        if (saludDibujada != salud) {
-            actualizarBarra();
-        }
-
-        float x = JuegoScreen.ANCHO - 390f;
-        float y = JuegoScreen.ALTO - 76f;
-        batch.draw(corazon, x, y - 8f, 54f, 48f);
-        batch.draw(barra, x + 66f, y - 1f, 300f, 34f);
+        Texture barra = barras[vidasVisibles()];
+        float alto = ANCHO_BARRA * barra.getHeight() / barra.getWidth();
+        batch.draw(barra, JuegoScreen.ANCHO - ANCHO_BARRA - 16f, JuegoScreen.ALTO - alto - 10f,
+            ANCHO_BARRA, alto);
     }
 
-    public void recibirGolpe() {
-        recibirGolpe(DANIO_POR_GOLPE);
-    }
-
+    // Jorge perdio un punto de vida (los enemigos mas fuertes quitan mas).
     public void recibirGolpe(int danio) {
         salud = Math.max(0, salud - danio);
     }
 
-    public int obtenerSalud() {
-        return salud;
+    public boolean estaCompleta() {
+        return salud == SALUD_MAXIMA;
     }
 
+    public void curarCompleto() {
+        salud = SALUD_MAXIMA;
+    }
+
+    public static void restablecer() {
+        salud = SALUD_MAXIMA;
+    }
+
+    // Indica si queda al menos un punto de salud.
     public boolean estaVivo() {
         return salud > 0;
     }
 
-    private void actualizarBarra() {
-        Pixmap pixmap = new Pixmap(ANCHO_BARRA, ALTO_BARRA, Pixmap.Format.RGBA8888);
-        pixmap.setColor(0.04f, 0.04f, 0.04f, 1f);
-        pixmap.fill();
-
-        int rellenoInterior = ANCHO_BARRA - 8;
-        int anchoRelleno = Math.round(rellenoInterior * salud / SALUD_MAXIMA);
-        int anchoSegmento = rellenoInterior / CANTIDAD_SEGMENTOS;
-        for (int x = 4; x < ANCHO_BARRA - 4; x++) {
-            boolean lleno = x - 4 < anchoRelleno;
-            pixmap.setColor(lleno ? 0.85f : 0.48f, lleno ? 0.04f : 0.48f, lleno ? 0.05f : 0.48f, 1f);
-            pixmap.drawLine(x, 4, x, ALTO_BARRA - 5);
-        }
-
-        pixmap.setColor(0.12f, 0.12f, 0.12f, 1f);
-        for (int segmento = 1; segmento < CANTIDAD_SEGMENTOS; segmento++) {
-            int x = 4 + segmento * anchoSegmento;
-            pixmap.fillRectangle(x - 2, 4, 4, ALTO_BARRA - 8);
-        }
-
-        barra.draw(pixmap, 0, 0);
-        pixmap.dispose();
-        saludDibujada = salud;
+    // Traduce los puntos internos (0 a 8) a vidas visibles (0 a 3),
+    // redondeando hacia arriba para que la barra no se vacie demasiado pronto.
+    private int vidasVisibles() {
+        return (salud * VIDAS_VISUALES + SALUD_MAXIMA - 1) / SALUD_MAXIMA;
     }
 
-    private Texture crearCorazon() {
-        String[] borde = {
-            "00111100111100",
-            "01111111111110",
-            "11111111111111",
-            "11111111111111",
-            "01111111111110",
-            "00111111111100",
-            "00011111111000",
-            "00001111110000",
-            "00000111100000"
-        };
-        String[] relleno = {
-            "00011000011000",
-            "00111100111100",
-            "01111111111110",
-            "01111111111110",
-            "00111111111100",
-            "00011111111000",
-            "00001111110000",
-            "00000111100000",
-            "00000011000000"
-        };
-        Pixmap pixmap = new Pixmap(borde[0].length(), borde.length, Pixmap.Format.RGBA8888);
-        pixmap.setColor(0f, 0f, 0f, 1f);
-        for (int y = 0; y < borde.length; y++) {
-            for (int x = 0; x < borde[y].length(); x++) {
-                if (borde[y].charAt(x) == '1') {
-                    pixmap.drawPixel(x, y);
-                }
-            }
-        }
-        pixmap.setColor(0.9f, 0.02f, 0.04f, 1f);
-        for (int y = 0; y < relleno.length; y++) {
-            for (int x = 0; x < relleno[y].length(); x++) {
-                if (relleno[y].charAt(x) == '1') {
-                    pixmap.drawPixel(x, y);
-                }
-            }
-        }
-        pixmap.setColor(1f, 0.68f, 0.65f, 1f);
-        pixmap.drawPixel(2, 6);
-        pixmap.drawPixel(3, 6);
-        Texture textura = new Texture(pixmap);
-        textura.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        pixmap.dispose();
-        return textura;
-    }
-
+    // Libera las cuatro texturas que forman la barra.
     public void dispose() {
-        corazon.dispose();
-        barra.dispose();
+        for (Texture barra : barras) {
+            barra.dispose();
+        }
     }
 }

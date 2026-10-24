@@ -1,14 +1,4 @@
-[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
-eclipse.project.name = appName + '-core'
-
+// Aca solo se declaran las dependencias del juego: la libreria LibGDX.
 dependencies {
-  api "com.badlogicgames.gdx:gdx:$gdxVersion"
-
-  if(enableGraalNative == 'true') {
-    implementation "io.github.berstanio:gdx-svmhelper-annotations:$graalHelperVersion"
-  }
-}
-
-jar {
-  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    api "com.badlogicgames.gdx:gdx:$gdxVersion"
 }

@@ -1,137 +1,105 @@
 package com.gladiador.juego;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.math.Rectangle;
 
-// Esta clase representa al personaje Jorge.
-// Aqui se controla su movimiento, salto, ataque, escudo y animaciones.
+// Esta clase representa a Jorge, el protagonista.
+// Controla su movimiento, salto, ataque con espada, escudo con parry y animaciones.
+// Las teclas: A/D mover, W o flecha arriba saltar, espacio o click izquierdo atacar,
+// E o click derecho escudo.
 public class Jugador {
 
-    // Animacion para caminar hacia la derecha.
+    // --- Animaciones (una por cada accion y direccion) ---
     private Animation<TextureRegion> caminarDerecha;
-
-    // Animacion para caminar hacia la izquierda.
     private Animation<TextureRegion> caminarIzquierda;
-
-    // Animacion para saltar hacia la derecha.
     private Animation<TextureRegion> saltoDerecha;
-
-    // Animacion para saltar hacia la izquierda.
     private Animation<TextureRegion> saltoIzquierda;
-
-    // Animacion para atacar hacia la derecha.
     private Animation<TextureRegion> ataqueDerecha;
-
-    // Animacion para atacar hacia la izquierda.
     private Animation<TextureRegion> ataqueIzquierda;
     private Animation<TextureRegion> escudo;
 
-    // Lista con todas las imagenes cargadas.
-    // Se usa para poder liberarlas al cerrar la pantalla.
-    private ArrayList<Texture> imagenes = new ArrayList<Texture>();
+    // Lista con todas las imagenes cargadas, para liberarlas al cerrar la pantalla.
+    private final ArrayList<Texture> imagenes = new ArrayList<>();
+
+    // Sonidos.
     private Sound sonidoSalto;
     private Sound sonidoAtaque;
     private Sound sonidoEscudo;
     private Sound sonidoCaminar;
-    private long idSonidoCaminar = -1L;
+    private long idSonidoCaminar = -1L; // identificador del "loop" de pasos (-1 = no suena)
 
-    // Posicion horizontal de Jorge.
-    private float x;
+    // --- Posicion y velocidad ---
+    private float x;              // posicion horizontal
+    private float y;              // posicion vertical de los pies
+    private float velocidadX;     // velocidad horizontal actual
+    private float velocidadY;     // velocidad vertical actual (salto/gravedad)
 
-    // Posicion vertical de los pies de Jorge.
-    private float y;
+    // --- "Estados": que esta haciendo Jorge ---
+    private boolean miraDerecha = true;      // hacia donde esta mirando
+    private boolean estaEnElSuelo = true;    // true si pisa el piso o una plataforma
+    private boolean estaAtacando = false;    // esta en mitad de un tajo
+    private boolean estaProtegiendo = false; // tiene el escudo levantado
 
-    // Velocidad horizontal actual.
-    private float velocidadX;
+    // --- Temporisadores de cada accion ---
+    private float tiempoAnimacion = 0f; // tiempo de la animacion actual
+    private float tiempoAtaque = 0f;    // tiempo que lleva el tajo en curso
+    private float tiempoEscudo = 0f;    // tiempo que lleva el escudo levantado
+    private long numeroAtaque;          // contador de tajos (evita que un tajo pegue dos veces)
+    private boolean escudoMiraDerecha = true;   // direccion del escudo actual
+    private boolean ataqueMiraDerecha = true;   // direccion del tajo actual (no cambia en el medio)
 
-    // Velocidad vertical actual.
-    private float velocidadY;
+    // --- Tiempo de espera y defensas ---
+    private float cooldownEscudo = 0f;       // tiempo antes de poder usar el escudo otra vez
+    private float tiempoInvulnerable = 0f;   // gracia despues de recibir un golpe
+    private float tiempoAturdido = 0f;       // Jorge no puede actuar mientras dure
+    private float velocidadEmpujeX = 0f;     // empuje de los golpes recibidos (se apaga solo)
+    private float escalaVisual = 1f;         // tamano visual (1 = normal, en el Coliseo 1.2)
 
-    // Indica hacia donde esta mirando Jorge.
-    private boolean miraDerecha = true;
+    // --- Numeros del movimiento (asi se ajustan facil las "fisicas") ---
+    private static final float VELOCIDAD_CAMINAR = 260f; // pixeles por segundo
+    private static final float FUERZA_SALTO = 720f;      // impulso inicial del salto
+    private static final float GRAVEDAD = 1500f;         // fuerza que lo hace caer
 
-    // Indica si Jorge esta tocando el suelo.
-    private boolean estaEnElSuelo = true;
-
-    // Indica si Jorge esta atacando.
-    private boolean estaAtacando = false;
-    private boolean estaProtegiendo = false;
-
-    // Tiempo que lleva reproduciendose la animacion actual.
-    private float tiempoAnimacion = 0f;
-
-    // Tiempo que lleva realizando el ataque.
-    private float tiempoAtaque = 0f;
-    private float tiempoEscudo = 0f;
-    private long numeroAtaque;
-    private boolean escudoMiraDerecha = true;
-
-    // Direccion en la que se lanzo el ataque actual (no cambia a mitad del tajo).
-    private boolean ataqueMiraDerecha = true;
-
-    // Tiempo que falta para poder volver a usar el escudo.
-    private float cooldownEscudo = 0f;
-
-    // Tiempo restante sin poder recibir daño despues de un golpe.
-    private float tiempoInvulnerable = 0f;
-
-    // Tiempo restante en el que Jorge esta aturdido y no puede actuar.
-    private float tiempoAturdido = 0f;
-
-    // Empuje horizontal por golpes recibidos (se va apagando solo).
-    private float velocidadEmpujeX = 0f;
-    private float escalaVisual = 1f;
-
-    // Velocidad con la que Jorge camina.
-    private static final float VELOCIDAD_CAMINAR = 260f;
-
-    // Fuerza inicial del salto.
-    private static final float FUERZA_SALTO = 720f;
-
-    // Fuerza que hace caer a Jorge.
-    private static final float GRAVEDAD = 1500f;
-
-    // Tamaño normal de Jorge.
+    // Tamano "logico" del personaje (su cuadro de accion, no el del dibujo).
     private static final float ANCHO_PERSONAJE = 180f;
     private static final float ALTO_VISIBLE_PERSONAJE = 137f;
 
-    // Ataque: 12 frames de 0.07s. El tajo real esta en los frames 5 a 7.
+    // Ataque: 12 frames de 0.07 segundos. El tajo real (hace dano) esta en los frames 5 a 7.
     private static final float DURACION_ATAQUE = 12 * 0.07f;
     private static final float ATAQUE_ACTIVO_DESDE = 0.28f;
     private static final float ATAQUE_ACTIVO_HASTA = 0.49f;
-    // Pequeño paso hacia adelante al tajar, para que el golpe "pese".
+    // Pequeno paso hacia adelante al tajar, para que el golpe "pese".
     private static final float INICIO_IMPULSO = 0.14f;
     private static final float VELOCIDAD_IMPULSO = 150f;
-    // Cuanto control de movimiento queda mientras se ataca.
+    // Cuanto control de movimiento queda mientras se ataca (0 = ninguno, 1 = total).
     private static final float CONTROL_DURANTE_ATAQUE = 0.25f;
 
-    // Escudo.
+    // Escudo: duracion minima, ventana de parry y enfriamiento.
     private static final float DURACION_MINIMA_ESCUDO = 0.36f;
-    private static final float VENTANA_PARRY = 0.20f;
+    private static final float VENTANA_PARRY = 0.20f;   // el bloqueo "justo" es en los primeros 0.2 s
     private static final float COOLDOWN_ESCUDO = 0.60f;
 
-    // Daño recibido.
+    // Cuando Jorge recibe un golpe: duracion de la gracia, del aturdimiento y del empuje.
     private static final float DURACION_INVULNERABLE = 0.90f;
     private static final float DURACION_ATURDIMIENTO = 0.22f;
     private static final float EMPUJE_AL_RECIBIR_DANIO = 420f;
     private static final float EMPUJE_AL_BLOQUEAR = 180f;
 
-    // Crear a Jorge en la posicion inicial recibida.
+    // Crear a Jorge en la posicion inicial recibida (x, y de sus pies).
     public Jugador(float posicionInicialX, float posicionInicialY) {
         x = posicionInicialX;
         y = posicionInicialY;
 
-        // Cargar las imagenes de todas las animaciones.
+        // Cargar las imagenes de todas las animaciones y los sonidos.
         cargarTodasLasAnimaciones();
         sonidoSalto = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_salto.mp3"));
         sonidoAtaque = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_ataque.mp3"));
@@ -139,24 +107,13 @@ public class Jugador {
         sonidoCaminar = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_caminar.mp3"));
     }
 
-    // Este metodo se llama una vez por cada imagen del juego.
-    public void actualizar(float delta, float posicionDelSuelo) {
-        actualizar(delta, posicionDelSuelo, JuegoScreen.ANCHO - ANCHO_PERSONAJE);
-    }
-
-    public void actualizar(float delta, float posicionDelSuelo, float limiteMaximoX) {
-        actualizar(delta, posicionDelSuelo, limiteMaximoX, Collections.<Rectangle>emptyList());
-    }
-
-    public void actualizar(
-        float delta,
-        float posicionDelSuelo,
-        float limiteMaximoX,
-        List<Rectangle> plataformas
-    ) {
-        // Aumentar el tiempo de la animacion actual.
+    // Este metodo se llama una vez por frame desde la pantalla que corresponda.
+    // delta = segundos desde el frame anterior; posicionDelSuelo = altura del piso;
+    // limiteMaximoX = hasta donde puede caminar; plataformas = plataformas donde puede aterrizar.
+    public void actualizar(float delta, float posicionDelSuelo, float limiteMaximoX, List<Rectangle> plataformas) {
         tiempoAnimacion = tiempoAnimacion + delta;
 
+        // La invulnerabilidad post-golpe se va apagando sola.
         if (tiempoInvulnerable > 0f) {
             tiempoInvulnerable = Math.max(0f, tiempoInvulnerable - delta);
         }
@@ -167,24 +124,17 @@ public class Jugador {
             velocidadX = 0f;
         } else {
             actualizarEscudo(delta);
-
-            // Revisar si se pulso la tecla de ataque.
             revisarAtaque(delta);
-
-            // Revisar movimiento y salto.
             revisarMovimiento(delta);
         }
 
         aplicarEmpuje(delta);
-
-        // Aplicar la gravedad y apoyar los pies en el suelo.
         aplicarGravedad(delta, posicionDelSuelo, plataformas);
-
-        // Evitar que Jorge salga por los lados del mundo.
         limitarPosicionHorizontal(limiteMaximoX);
         actualizarSonidoCaminar();
     }
 
+    // El sonido de pasos es un loop que se prende al caminar y se apaga al parar.
     private void actualizarSonidoCaminar() {
         boolean caminando = estaEnElSuelo
             && tiempoAturdido <= 0f
@@ -199,10 +149,8 @@ public class Jugador {
         }
     }
 
+    // Cambiar el tamano visual (lo usa el Coliseo para agrandarlo un poco).
     public void setEscalaVisual(float escala) {
-        if (escala <= 0f || Float.isNaN(escala) || Float.isInfinite(escala)) {
-            throw new IllegalArgumentException("La escala visual debe ser un numero positivo.");
-        }
         escalaVisual = escala;
     }
 
@@ -211,7 +159,7 @@ public class Jugador {
         // Primero suponemos que Jorge esta quieto.
         velocidadX = 0f;
         if (estaProtegiendo) {
-            return;
+            return; // con el escudo no se camina
         }
 
         float direccion = 0f;
@@ -241,7 +189,7 @@ public class Jugador {
         boolean sePulsoSalto = Gdx.input.isKeyJustPressed(Input.Keys.W)
             || Gdx.input.isKeyJustPressed(Input.Keys.UP);
 
-        // Solo se puede saltar si esta en el suelo y no esta atacando.
+        // Solo se puede saltar si esta en el suelo y no esta atacando ni bloqueando.
         if (sePulsoSalto && estaEnElSuelo && !estaAtacando && !estaProtegiendo) {
             velocidadY = FUERZA_SALTO;
             estaEnElSuelo = false;
@@ -261,6 +209,7 @@ public class Jugador {
             || Gdx.input.isButtonPressed(Input.Buttons.RIGHT);
 
         if (estaProtegiendo) {
+            // Levantar el escudo hasta: soltar la tecla (pasado el minimo) o que termine la animacion.
             tiempoEscudo = tiempoEscudo + delta;
             boolean terminoAnimacion = tiempoEscudo >= escudo.getAnimationDuration();
             boolean soltoElBoton = !mantiene && tiempoEscudo >= DURACION_MINIMA_ESCUDO;
@@ -277,6 +226,7 @@ public class Jugador {
         // Solo se puede cancelar un ataque con el escudo cuando ya esta en recuperacion.
         boolean puedeCancelarAtaque = !estaAtacando || tiempoAtaque >= ATAQUE_ACTIVO_HASTA;
         if (inicioEscudo && cooldownEscudo <= 0f && puedeCancelarAtaque) {
+            // Con A o D presionadas, el escudo se levanta mirando para ese lado.
             boolean izquierda = Gdx.input.isKeyPressed(Input.Keys.A);
             boolean derecha = Gdx.input.isKeyPressed(Input.Keys.D);
             if (izquierda != derecha) {
@@ -291,12 +241,13 @@ public class Jugador {
         }
     }
 
-    // Aplicar la gravedad y detectar cuando Jorge vuelve al suelo.
+    // Aplicar la gravedad y detectar cuando Jorge vuelve al suelo o aterriza en una plataforma.
     private void aplicarGravedad(float delta, float posicionDelSuelo, List<Rectangle> plataformas) {
         float posicionAnteriorY = y;
         velocidadY = velocidadY - GRAVEDAD * delta;
         y = y + velocidadY * delta;
 
+        // Cayendo (velocidadY negativa): revisar si cruza la parte superior de alguna plataforma.
         if (velocidadY <= 0f) {
             float jugadorIzquierda = x + 40f;
             float jugadorDerecha = x + ANCHO_PERSONAJE - 40f;
@@ -315,6 +266,7 @@ public class Jugador {
             }
         }
 
+        // Si paso el nivel del piso, apoyarse.
         if (y <= posicionDelSuelo) {
             y = posicionDelSuelo;
             velocidadY = 0f;
@@ -353,7 +305,7 @@ public class Jugador {
         }
     }
 
-    // Empezar un tajo individual; cada nueva pulsacion inicia otro ataque.
+    // Empezar un tajo nuevo. Cada pulsacion inicia uno distinto.
     private void iniciarAtaque() {
         // Al empezar el tajo se puede elegir hacia donde apuntar con A/D.
         boolean izquierda = Gdx.input.isKeyPressed(Input.Keys.A);
@@ -372,7 +324,7 @@ public class Jugador {
         sonidoAtaque.play();
     }
 
-    // --- Daño y defensa ---
+    // --- Danio y defensa ---
 
     // Jorge recibe un golpe sin defensa. direccionEmpuje: 1 = lo empuja a la derecha, -1 a la izquierda.
     public void recibirImpacto(float direccionEmpuje) {
@@ -393,6 +345,7 @@ public class Jugador {
     }
 
     // El escudo solo protege de lo que viene de frente.
+    // centroEnemigoX = desde donde vino el golpe.
     public boolean bloqueaGolpeDesde(float centroEnemigoX) {
         if (!estaProtegiendo) {
             return false;
@@ -404,16 +357,19 @@ public class Jugador {
         return centroEnemigoX <= centroJugadorX + 20f;
     }
 
+    // true durante el primer cuarto de segundo del escudo: ahi el bloqueo es "parry".
     public boolean estaEnVentanaParry() {
         return estaProtegiendo && tiempoEscudo <= VENTANA_PARRY;
     }
 
+    // Informa si aun esta activa la proteccion temporal despues de un impacto.
     public boolean esInvulnerable() {
         return tiempoInvulnerable > 0f;
     }
 
-    // --- Consultas ---
+    // --- Consultas que usan las pantallas ---
 
+    // Devuelven la posicion y el centro horizontal del personaje en el mundo.
     public float getX() {
         return x;
     }
@@ -426,10 +382,6 @@ public class Jugador {
         return x + ANCHO_PERSONAJE / 2f;
     }
 
-    public boolean estaAtacando() {
-        return estaAtacando;
-    }
-
     // true solo durante los frames en los que la espada realmente corta.
     public boolean estaAtaqueActivo() {
         return estaAtacando
@@ -437,6 +389,8 @@ public class Jugador {
             && tiempoAtaque <= ATAQUE_ACTIVO_HASTA;
     }
 
+    // Identificador del tajo actual: sirve para que un mismo tajo no pegue dos veces.
+    // Datos del tajo actual que las pantallas usan para resolver las colisiones.
     public long getNumeroAtaque() {
         return numeroAtaque;
     }
@@ -446,68 +400,37 @@ public class Jugador {
         return ataqueMiraDerecha ? 1f : -1f;
     }
 
-    public boolean estaProtegiendo() {
-        return estaProtegiendo;
-    }
-
-    public boolean miraDerecha() {
-        return miraDerecha;
-    }
-
-    public com.badlogic.gdx.math.Rectangle getHitbox() {
-        float ancho = 70f * escalaVisual;
-        float alto = 115f * escalaVisual;
-        return new com.badlogic.gdx.math.Rectangle(
-            x + (ANCHO_PERSONAJE - ancho) / 2f,
-            y + 5f,
-            ancho,
-            alto
-        );
-    }
-
-    // El area se mide desde el centro de Jorge, igual de larga hacia los dos lados.
-    public com.badlogic.gdx.math.Rectangle getAreaDeAtaque() {
-        float ancho = 130f * escalaVisual;
-        float alto = 100f * escalaVisual;
-        boolean haciaDerecha = estaAtacando ? ataqueMiraDerecha : miraDerecha;
-        float centro = x + ANCHO_PERSONAJE / 2f;
-        float xAtaque = haciaDerecha ? centro + 20f * escalaVisual : centro - 20f * escalaVisual - ancho;
-        float yAtaque = y + 25f * escalaVisual;
-        return new com.badlogic.gdx.math.Rectangle(xAtaque, yAtaque, ancho, alto);
-    }
-
     // No permitir que Jorge salga del ancho del mundo.
     private void limitarPosicionHorizontal(float posicionMaxima) {
         if (x < 0f) {
             x = 0f;
         }
-
         if (x > posicionMaxima) {
             x = posicionMaxima;
         }
     }
 
-    // Dibujar el frame correcto de Jorge.
-    public void dibujar(SpriteBatch batch) {
-        dibujar(batch, 0f);
-    }
-
+    // Dibujar el frame correcto de Jorge. desplazamientoX = cuanto se movio la camara.
     public void dibujar(SpriteBatch batch, float desplazamientoX) {
         // Obtener la imagen que corresponde al estado actual.
         TextureRegion imagenActual = obtenerImagenActual();
 
+        // El alto se fija con escalaVisual; el ancho mantiene la proporcion del dibujo.
         float escala = ALTO_VISIBLE_PERSONAJE * escalaVisual / imagenActual.getRegionHeight();
         float ancho = imagenActual.getRegionWidth() * escala;
         float alto = ALTO_VISIBLE_PERSONAJE * escalaVisual;
         float posicionX = x - desplazamientoX + (ANCHO_PERSONAJE - ancho) / 2f;
         float posicionY = y;
+
+        // El escudo siempre se dibujo mirando a la derecha; si toca mirar a la izquierda
+        // se dibuja "al reves" (con ancho negativo).
         boolean voltearEscudo = estaProtegiendo && !escudoMiraDerecha;
         if (voltearEscudo) {
             posicionX += ancho;
         }
 
-        // Colores de aviso: rojo al ser golpeado, parpadeo al ser invulnerable,
-        // celeste mientras el parry esta activo.
+        // Colores de aviso: amarillo al estar aturdido, celeste mientras el parry esta activo,
+        // y parpadeo transparente cuando es invulnerable.
         float rojo = 1f;
         float verde = 1f;
         float azul = 1f;
@@ -524,16 +447,17 @@ public class Jugador {
         }
         batch.setColor(rojo, verde, azul, alfa);
         batch.draw(imagenActual, posicionX, posicionY, voltearEscudo ? -ancho : ancho, alto);
-        batch.setColor(1f, 1f, 1f, 1f);
+        batch.setColor(1f, 1f, 1f, 1f); // dejar el color como estaba
     }
 
     // Elegir una imagen segun la accion y la direccion.
     private TextureRegion obtenerImagenActual() {
+        // Prioridad: escudo > ataque > salto > caminar > quieto.
         if (estaProtegiendo) {
             return escudo.getKeyFrame(tiempoEscudo, false);
         }
 
-        // Si esta atacando, devolver la animacion de ataque (siempre hacia donde empezo el tajo).
+        // Si esta atacando, la animacion mira SIEMPRE hacia donde empezo el tajo.
         if (estaAtacando) {
             if (ataqueMiraDerecha) {
                 return ataqueDerecha.getKeyFrame(tiempoAtaque, false);
@@ -541,7 +465,6 @@ public class Jugador {
             return ataqueIzquierda.getKeyFrame(tiempoAtaque, false);
         }
 
-        // Si esta en el aire, devolver la animacion de salto.
         if (!estaEnElSuelo) {
             if (miraDerecha) {
                 return saltoDerecha.getKeyFrame(tiempoAnimacion, false);
@@ -549,22 +472,41 @@ public class Jugador {
             return saltoIzquierda.getKeyFrame(tiempoAnimacion, false);
         }
 
-        // Si se mueve, devolver la animacion de caminar.
         if (velocidadX != 0f) {
             if (miraDerecha) {
-                return caminarDerecha.getKeyFrame(tiempoAnimacion, true);
+                return caminarDerecha.getKeyFrame(tiempoAnimacion, true); // true = se repite
             }
             return caminarIzquierda.getKeyFrame(tiempoAnimacion, true);
         }
 
-        // Si esta quieto, mostrar el primer frame de caminar.
+        // Quieto: mostrar el primer frame de caminar.
         if (miraDerecha) {
             return caminarDerecha.getKeyFrame(0f);
         }
         return caminarIzquierda.getKeyFrame(0f);
     }
 
-    // Cargar las animaciones de Jorge.
+    // Caja del cuerpo: lo que pueden tocar los golpes enemigos.
+    public Rectangle getHitbox() {
+        float ancho = 70f * escalaVisual;
+        float alto = 115f * escalaVisual;
+        return new Rectangle(x + (ANCHO_PERSONAJE - ancho) / 2f, y + 5f, ancho, alto);
+    }
+
+    // Caja del tajo: el area por delante de Jorge donde la espada hace dano.
+    public Rectangle getAreaDeAtaque() {
+        float ancho = 130f * escalaVisual;
+        float alto = 100f * escalaVisual;
+        boolean haciaDerecha = estaAtacando ? ataqueMiraDerecha : miraDerecha;
+        float centro = x + ANCHO_PERSONAJE / 2f;
+        float xAtaque = haciaDerecha
+            ? centro + 20f * escalaVisual
+            : centro - 20f * escalaVisual - ancho;
+        float yAtaque = y + 25f * escalaVisual;
+        return new Rectangle(xAtaque, yAtaque, ancho, alto);
+    }
+
+    // Cargar las animaciones de Jorge (carpeta, cantidad de imagenes, duracion de cada una).
     private void cargarTodasLasAnimaciones() {
         caminarDerecha = cargarAnimacion("caminar_derecha", 10, 0.08f);
         caminarIzquierda = cargarAnimacion("caminar_izquierda", 10, 0.08f);
@@ -577,51 +519,36 @@ public class Jugador {
 
     // Cargar una animacion desde una carpeta.
     // Los archivos deben llamarse 01.png, 02.png, 03.png, etc.
-    private Animation<TextureRegion> cargarAnimacion(
-        String nombreDeCarpeta,
-        int cantidadDeImagenes,
-        float duracionDeCadaImagen
-    ) {
-        // Crear un arreglo para guardar los frames.
+    private Animation<TextureRegion> cargarAnimacion(String nombreDeCarpeta,
+                                                     int cantidadDeImagenes,
+                                                     float duracionDeCadaImagen) {
         TextureRegion[] frames = new TextureRegion[cantidadDeImagenes];
 
-        // Cargar cada archivo de imagen.
         for (int numero = 0; numero < cantidadDeImagenes; numero++) {
-            String nombreDelArchivo = String.format(
-                "jugador/%s/%02d.png",
-                nombreDeCarpeta,
-                numero + 1
-            );
+            String nombreDelArchivo = String.format("jugador/%s/%02d.png",
+                nombreDeCarpeta, numero + 1);
 
             Texture imagen = new Texture(Gdx.files.internal(nombreDelArchivo));
             imagenes.add(imagen);
+            // Recortar las transparencias para que el personaje quede bien apoyado.
             frames[numero] = SpriteFrameUtils.recortarTransparencia(imagen, nombreDelArchivo);
         }
 
-        // Crear y devolver la animacion.
         return new Animation<TextureRegion>(duracionDeCadaImagen, frames);
     }
 
-    // Liberar todas las imagenes cuando se cierra la pantalla.
+    // Liberar todas las imagenes y sonidos cuando se cierra la pantalla.
     public void dispose() {
-        if (sonidoCaminar != null) {
-            if (idSonidoCaminar >= 0L) {
-                sonidoCaminar.stop(idSonidoCaminar);
-                idSonidoCaminar = -1L;
-            }
-            sonidoCaminar.dispose();
+        if (idSonidoCaminar >= 0L) {
+            sonidoCaminar.stop(idSonidoCaminar);
+            idSonidoCaminar = -1L;
         }
+        sonidoCaminar.dispose();
         for (Texture imagen : imagenes) {
             imagen.dispose();
         }
-        if (sonidoSalto != null) {
-            sonidoSalto.dispose();
-        }
-        if (sonidoAtaque != null) {
-            sonidoAtaque.dispose();
-        }
-        if (sonidoEscudo != null) {
-            sonidoEscudo.dispose();
-        }
+        sonidoSalto.dispose();
+        sonidoAtaque.dispose();
+        sonidoEscudo.dispose();
     }
 }

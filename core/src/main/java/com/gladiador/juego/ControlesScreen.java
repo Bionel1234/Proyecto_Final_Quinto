@@ -11,33 +11,33 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
-// Pantalla que muestra la imagen con todos los controles.
+// Pantalla de controles: solo muestra una imagen grande con la explicacion.
+// Se vuelve al menu con ESC o haciendo click en el boton dibujado en la imagen.
 public class ControlesScreen implements Screen {
 
-    // Referencia para cambiar nuevamente al menu.
     private final MainClass game;
 
-    // Imagen, musica y vista de esta pantalla.
     private Texture fondo;
     private Music musica;
     private OrthographicCamera camera;
     private Viewport viewport;
     private boolean mousePresionado;
 
-    // Coordenadas del boton incluido dentro de la imagen.
+    // Caja del boton "volver", medida sobre la propia imagen del fondo
+    // (x, y del borde inferior izquierdo, ancho y alto).
     private static final float BOTON_X = 1060f;
     private static final float BOTON_Y = 20f;
     private static final float BOTON_ANCHO = 290f;
     private static final float BOTON_ALTO = 95f;
 
-    // Recibir el juego principal.
+    // Recibe el juego principal para poder volver al menu.
     public ControlesScreen(MainClass game) {
         this.game = game;
     }
 
+    // Inicializa camara, imagen y musica al entrar en la pantalla.
     @Override
     public void show() {
-        // Preparar camara, imagen y musica.
         camera = new OrthographicCamera();
         viewport = new FitViewport(JuegoScreen.ANCHO, JuegoScreen.ALTO, camera);
         viewport.apply(true);
@@ -51,9 +51,10 @@ public class ControlesScreen implements Screen {
         musica.play();
     }
 
+    // Dibuja la pantalla y detecta si el jugador pide regresar.
     @Override
     public void render(float delta) {
-        // Limpiar la ventana y dibujar la imagen completa.
+        // Limpiar la ventana y dibujar la imagen ocupando todo el ancho.
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
@@ -68,19 +69,17 @@ public class ControlesScreen implements Screen {
         game.batch.draw(fondo, 0f, 0f, JuegoScreen.ANCHO, JuegoScreen.ALTO);
         game.batch.end();
 
-        // Volver con ESC o haciendo click en el boton de la imagen.
-        boolean presionado = Gdx.input.isTouched()
-            || Gdx.input.isButtonPressed(Input.Buttons.LEFT);
+        // Volver con ESC o con un click sobre la caja del boton.
+        boolean presionado = Gdx.input.isTouched() || Gdx.input.isButtonPressed(Input.Buttons.LEFT);
         boolean clickNuevo = presionado && !mousePresionado;
-        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)
-            || (clickNuevo && sobreBoton())) {
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) || (clickNuevo && sobreBoton())) {
             game.setScreen(new MenuScreen(game));
             return;
         }
         mousePresionado = presionado;
     }
 
-    // Comprobar si el mouse esta sobre el boton dibujado.
+    // Convertir la posicion del mouse al plano del juego y ver si cae dentro del boton.
     private boolean sobreBoton() {
         Vector3 mouse = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f);
         viewport.unproject(mouse);
@@ -88,34 +87,41 @@ public class ControlesScreen implements Screen {
             && mouse.y >= BOTON_Y && mouse.y <= BOTON_Y + BOTON_ALTO;
     }
 
+    // Ajusta el area de dibujo cuando cambia el tamano de la ventana.
     @Override
     public void resize(int width, int height) {
-        // Adaptar la vista al nuevo tamaño de la ventana.
-        if (viewport != null) viewport.update(width, height, true);
+        if (viewport != null) {
+            viewport.update(width, height, true);
+        }
     }
 
+    // LibGDX llama estos metodos al pausar o reanudar la aplicacion.
+    // Esta pantalla no necesita modificar su estado en esos momentos.
     @Override
     public void pause() {
-        // No hay una accion especial al pausar.
     }
 
+    // La pantalla de controles no tiene temporizadores que deban reiniciarse.
     @Override
     public void resume() {
-        // No hay una accion especial al reanudar.
     }
 
+    // Detiene la musica al cambiar a otra pantalla.
     @Override
     public void hide() {
         // Detener la musica al salir de esta pantalla.
-        if (musica != null) musica.stop();
-    }
-
-    @Override
-    public void dispose() {
-        // Liberar imagen y musica.
-        if (fondo != null) fondo.dispose();
         if (musica != null) {
             musica.stop();
+        }
+    }
+
+    // Libera imagen y musica creadas por esta pantalla.
+    @Override
+    public void dispose() {
+        if (fondo != null) {
+            fondo.dispose();
+        }
+        if (musica != null) {
             musica.dispose();
         }
     }

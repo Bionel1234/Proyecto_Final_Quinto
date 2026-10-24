@@ -1,48 +1,50 @@
+// Indica el paquete al que pertenece esta clase y coincide con las carpetas
+// lwjgl3/com/gladiador/juego dentro de la estructura de codigo fuente.
 package com.gladiador.juego.lwjgl3;
 
+// Clase de LibGDX que crea y ejecuta la aplicacion usando la ventana LWJGL3.
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
+// Configuracion que define el aspecto y el comportamiento de esa ventana.
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+// Clase principal del juego: contiene las pantallas y la logica general.
 import com.gladiador.juego.MainClass;
 
-/** Launches the desktop (LWJGL3) application. */
+// Clase de arranque para ejecutar el juego como aplicacion de escritorio.
 public class Lwjgl3Launcher {
+
+    // Punto de entrada que Java ejecuta primero al iniciar el programa.
+    // "public" permite que Java encuentre el metodo; "static" permite llamarlo
+    // sin crear antes un objeto Lwjgl3Launcher; "void" indica que no devuelve
+    // un resultado. "args" recibe los argumentos opcionales de la terminal.
     public static void main(String[] args) {
-        if (StartupHelper.startNewJvmIfRequired()) return; // This handles macOS support and helps on Windows.
-        createApplication();
-    }
+        // Crea un objeto de configuracion con los valores iniciales de LibGDX.
+        Lwjgl3ApplicationConfiguration configuracion = new Lwjgl3ApplicationConfiguration();
 
-    private static Lwjgl3Application createApplication() {
-        return new Lwjgl3Application(new MainClass(), getDefaultConfiguration());
-    }
+        // Define el texto que aparece en la barra de titulo de la ventana.
+        configuracion.setTitle("Jorge el ultimo Gladiador");
 
-    private static Lwjgl3ApplicationConfiguration getDefaultConfiguration() {
-        Lwjgl3ApplicationConfiguration configuration = new Lwjgl3ApplicationConfiguration();
-        configuration.setTitle("JorgeElUltimoGladiador2.0");
-        //// Vsync limits the frames per second to what your hardware can display, and helps eliminate
-        //// screen tearing. This setting doesn't always work on Linux, so the line after is a safeguard.
-        configuration.useVsync(true);
-        //// Limits FPS to the refresh rate of the currently active monitor, plus 1 to try to match fractional
-        //// refresh rates. The Vsync setting above should limit the actual FPS to match the monitor.
-        configuration.setForegroundFPS(Lwjgl3ApplicationConfiguration.getDisplayMode().refreshRate + 1);
-        //// If you remove the above line and set Vsync to false, you can get unlimited FPS, which can be
-        //// useful for testing performance, but can also be very stressful to some hardware.
-        //// You may also need to configure GPU drivers to fully disable Vsync; this can cause screen tearing.
+        // Abre la ventana en modo normal (no pantalla completa), inicialmente
+        // con 640 pixeles de ancho y 480 de alto.
+        configuracion.setWindowedMode(640, 480);
 
-        configuration.setWindowedMode(640, 480);
-        //// You can change these files; they are in lwjgl3/src/main/resources/ .
-        //// They can also be loaded from the root of assets/ .
-        configuration.setWindowIcon("libgdx128.png", "libgdx64.png", "libgdx32.png", "libgdx16.png");
+        // Sincroniza el dibujo con la frecuencia del monitor para reducir
+        // los cortes o desgarros visibles durante el movimiento.
+        configuracion.useVsync(true);
 
-        //// This could improve compatibility with Windows machines with buggy OpenGL drivers, Macs
-        //// with Apple Silicon that have to emulate compatibility with OpenGL anyway, and more.
-        //// This uses the dependency `com.badlogicgames.gdx:gdx-lwjgl3-angle` to function.
-        //// You would need to add this line to lwjgl3/build.gradle , below the dependency on `gdx-backend-lwjgl3`:
-        ////     implementation "com.badlogicgames.gdx:gdx-lwjgl3-angle:$gdxVersion"
-        //// You can choose to add the following line and the mentioned dependency if you want; they
-        //// are not intended for games that use GL30 (which is compatibility with OpenGL ES 3.0).
-        //// Know that it might not work well in some cases.
-//        configuration.setOpenGLEmulation(Lwjgl3ApplicationConfiguration.GLEmulation.ANGLE_GLES20, 0, 0);
+        // Limita a 60 los cuadros por segundo cuando la ventana esta activa,
+        // evitando que el juego dibuje mas cuadros de los necesarios.
+        configuracion.setForegroundFPS(60);
 
-        return configuration;
+        // Carga los iconos de la ventana en varios tamanos. El sistema operativo
+        // elige el tamano adecuado segun donde muestre el icono. Estos archivos
+        // deben estar disponibles en la carpeta de recursos de escritorio.
+        configuracion.setWindowIcon("libgdx128.png", "libgdx64.png",
+            "libgdx32.png", "libgdx16.png");
+
+        // Construye el juego principal y se lo entrega al backend de escritorio
+        // junto con la configuracion. LibGDX abre la ventana y llama a los
+        // metodos del ciclo de vida del juego, como create() y render().
+        // La llamada permanece activa hasta que se cierra la ventana.
+        new Lwjgl3Application(new MainClass(), configuracion);
     }
 }

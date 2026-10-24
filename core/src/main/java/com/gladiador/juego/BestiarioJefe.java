@@ -3,43 +3,67 @@ package com.gladiador.juego;
 import java.util.ArrayList;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 
+// El jefe "El Bestiario" del Coliseo.
+// Alterna dos ataques: el latigazo y la invocacion de un leon.
 public class BestiarioJefe {
 
-    private static final int CANTIDAD_FRAMES_LATIGO = 25;
+    private static final int CANTIDAD_FRAMES_LATIGO = 12;   // frames de la animacion de ataque
+    private static final int CANTIDAD_FRAMES_ESTAITCO = 13; // frames de la animacion quieto
     private static final int VIDA_MAXIMA = 16;
-    private static final float DURACION_FRAME = 0.07f;
-    private static final float DURACION_ANIMACION_LATIGO = CANTIDAD_FRAMES_LATIGO * DURACION_FRAME;
+    private static final float DURACION_FRAME_ESTAITCO = 0.10f;
+    // El ataque dura lo mismo que antes (para no cambiar la jugabilidad), pero ahora
+    // se reparte entre 12 imagenes en vez de 25.
+    private static final float DURACION_ANIMACION_LATIGO = 1.75f;
+    private static final float DURACION_FRAME_LATIGO = DURACION_ANIMACION_LATIGO / CANTIDAD_FRAMES_LATIGO;
     private static final float DURACION_INVOCACION = 1.4f;
     private static final float MOMENTO_IMPACTO_LATIGO = 0.78f;
     private static final float ESPERA_ENTRE_ATAQUES_MINIMA = 2.2f;
     private static final float ESPERA_ENTRE_ATAQUES_MAXIMA = 3.4f;
-    private static final float ESCALA_JEFE = 0.98f;
     private static final float TAMANO_LIENZO = 512f;
     private static final float POSICION_CENTRO_X = 1050f;
     private static final float ALTURA_PISO = 72f;
     private static final float ALTURA_MANO_LATIGO = ALTURA_PISO + 68f;
     private static final float DISTANCIA_MANO_CENTRO = 50f;
+    private static final float ALTURA_VISUAL_JEFE = 300f;  // alto del jefe en pantalla
+    private static final float FRACCION_BANDA_PIES = 0.18f; // parte de abajo usada para "apoyar" los pies
 
     public enum Ataque {
+        // El jefe esta esperando el proximo ataque.
         NINGUNO,
+        // Ataque cercano con el latigo.
         LATIGO,
+        // Ataque a distancia que crea un leon.
         LEON
     }
 
-    private final TextureRegion[] framesLatigo;
-    private final Animation<TextureRegion> animacionLatigo;
+    // Medidas de un conjunto de imagenes: donde apoyar los pies y donde centrar el cuerpo.
+    private static class Medida {
+        float centroPiesX;  // centro horizontal de los pies (en pixeles de la imagen)
+        float filaPiesY;    // fila mas baja con dibujo (en pixeles de la imagen)
+        float altoVisible;  // alto del dibujo (en pixeles de la imagen)
+        float canvas;       // tamano del lado de la imagen (256 o 512)
+    }
+
+    private final Animation<TextureRegion> estaticoDerecha;
+    private final Animation<TextureRegion> estaticoIzquierda;
+    private final Animation<TextureRegion> ataqueDerecha;
+    private final Animation<TextureRegion> ataqueIzquierda;
+    private final Medida medidaEstatico;
+    private final Medida medidaAtaque;
+    private final float escalaVisual;   // pixeles de imagen -> pixeles de pantalla
     private final ArrayList<Texture> texturas = new ArrayList<>();
 
     private int vida = VIDA_MAXIMA;
     private float tiempoAtaque;
+    private float tiempoQuieto;         // reloj propio de la animacion "quieto"
     private float tiempoHastaAtaque = 1.8f;
     private float tiempoDanio;
     private long ultimoAtaqueRecibido = -1L;
@@ -48,21 +72,30 @@ public class BestiarioJefe {
     private boolean proximoAtaqueEsLatigo = true;
     private Ataque ataqueActual = Ataque.NINGUNO;
 
+    private boolean impactoLatigoPendiente;
+    private boolean invocacionPendiente;
+
     public BestiarioJefe() {
-        framesLatigo = new TextureRegion[CANTIDAD_FRAMES_LATIGO];
-        for (int indice = 0; indice < CANTIDAD_FRAMES_LATIGO; indice++) {
-            String ruta = String.format("bestiario/latigo/%02d.png", indice + 1);
-            Texture textura = new Texture(Gdx.files.internal(ruta));
-            textura.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-            texturas.add(textura);
-            TextureRegion frame = new TextureRegion(textura);
-            frame.flip(true, false);
-            framesLatigo[indice] = frame;
-        }
-        animacionLatigo = new Animation<>(DURACION_FRAME, framesLatigo);
+        // El jefe mira hacia los dos lados: cargamos las cuatro animaciones.
+        estaticoDerecha = cargarAnimacion("jefe1/estatico_derecha", CANTIDAD_FRAMES_ESTAITCO,
+            DURACION_FRAME_ESTAITCO);
+        estaticoIzquierda = cargarAnimacion("jefe1/estatico_izquierda", CANTIDAD_FRAMES_ESTAITCO,
+            DURACION_FRAME_ESTAITCO);
+        ataqueDerecha = cargarAnimacion("jefe1/ataque_derecha", CANTIDAD_FRAMES_LATIGO,
+            DURACION_FRAME_LATIGO);
+        ataqueIzquierda = cargarAnimacion("jefe1/ataque_izquierda", CANTIDAD_FRAMES_LATIGO,
+            DURACION_FRAME_LATIGO);
+
+        medidaEstatico = medirConjunto("jefe1/estatico_derecha", CANTIDAD_FRAMES_ESTAITCO, 256f);
+        medidaAtaque = medirConjunto("jefe1/ataque_derecha", CANTIDAD_FRAMES_LATIGO, 512f);
+        // Usamos la misma escala para las dos animaciones: asi el jefe no cambia
+        // de tamano entre estar quieto y atacar.
+        escalaVisual = ALTURA_VISUAL_JEFE / medidaEstatico.altoVisible;
     }
 
+    // Actualiza temporizadores, decide cuando atacar y genera eventos de impacto.
     public void actualizar(float delta) {
+        tiempoQuieto += delta;
         if (tiempoDanio > 0f) {
             tiempoDanio = Math.max(0f, tiempoDanio - delta);
         }
@@ -95,9 +128,7 @@ public class BestiarioJefe {
         }
     }
 
-    private boolean impactoLatigoPendiente;
-    private boolean invocacionPendiente;
-
+    // Empieza el siguiente ataque de la secuencia alternada.
     private void iniciarSiguienteAtaque() {
         ataqueActual = proximoAtaqueEsLatigo ? Ataque.LATIGO : Ataque.LEON;
         proximoAtaqueEsLatigo = !proximoAtaqueEsLatigo;
@@ -106,6 +137,7 @@ public class BestiarioJefe {
         leonInvocado = false;
     }
 
+    // Vuelve al estado de espera y sortea cuanto tarda el siguiente ataque.
     private void finalizarAtaque() {
         ataqueActual = Ataque.NINGUNO;
         tiempoHastaAtaque = MathUtils.random(ESPERA_ENTRE_ATAQUES_MINIMA, ESPERA_ENTRE_ATAQUES_MAXIMA);
@@ -127,6 +159,7 @@ public class BestiarioJefe {
         return true;
     }
 
+    // Aplica como maximo un dano por tajo del jugador y activa el destello visual.
     public boolean recibirGolpe(long numeroAtaque) {
         if (!estaVivo() || numeroAtaque == ultimoAtaqueRecibido) {
             return false;
@@ -137,6 +170,7 @@ public class BestiarioJefe {
         return true;
     }
 
+    // Cancela el ataque actual, por ejemplo cuando Jorge consigue un parry.
     public void aturdir() {
         if (!estaVivo()) {
             return;
@@ -148,16 +182,18 @@ public class BestiarioJefe {
         tiempoHastaAtaque = 1f;
     }
 
+    // Devuelve el rectangulo de colision del cuerpo del jefe.
     public Rectangle getHitbox() {
-        float mitadAnchoVisible = TAMANO_LIENZO * ESCALA_JEFE * 0.15f;
+        float mitadAnchoVisible = TAMANO_LIENZO * 0.98f * 0.15f;
         return new Rectangle(
             POSICION_CENTRO_X - mitadAnchoVisible,
             ALTURA_PISO + 5f,
             mitadAnchoVisible * 2f,
-            TAMANO_LIENZO * ESCALA_JEFE * 0.33f
+            TAMANO_LIENZO * 0.98f * 0.33f
         );
     }
 
+    // Zona que cubre el latigazo: va desde la mano del jefe hasta donde esta Jorge.
     public Rectangle getAreaLatigo(float jugadorX, float jugadorY) {
         float origenX = getOrigenLatigoX(jugadorX);
         float objetivoY = jugadorY + 65f;
@@ -170,61 +206,6 @@ public class BestiarioJefe {
 
     public float getCentroX() {
         return POSICION_CENTRO_X;
-    }
-
-    public void dibujarLatigo(ShapeRenderer shapeRenderer, float jugadorX, float jugadorY) {
-        if (ataqueActual != Ataque.LATIGO || tiempoAtaque < 0.32f || tiempoAtaque > 1.28f) {
-            return;
-        }
-        float progreso = MathUtils.clamp((tiempoAtaque - 0.32f) / 0.44f, 0f, 1f);
-        float origenX = getOrigenLatigoX(jugadorX);
-        float objetivoX = MathUtils.lerp(origenX, jugadorX, progreso);
-        float objetivoY = MathUtils.lerp(ALTURA_MANO_LATIGO, jugadorY + 65f, progreso);
-        float distancia = objetivoX - origenX;
-        float curva = Math.min(85f, Math.abs(distancia) * 0.12f);
-
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        shapeRenderer.setColor(0.12f, 0.07f, 0.045f, 1f);
-        dibujarCurvaLatigo(shapeRenderer, origenX, objetivoX, objetivoY, curva, 5f);
-        shapeRenderer.setColor(0.58f, 0.34f, 0.20f, 1f);
-        dibujarCurvaLatigo(shapeRenderer, origenX, objetivoX, objetivoY, curva, 2f);
-        shapeRenderer.end();
-    }
-
-    private void dibujarCurvaLatigo(
-        ShapeRenderer shapeRenderer,
-        float origenX,
-        float objetivoX,
-        float objetivoY,
-        float curva,
-        float ancho
-    ) {
-        if (curva == 0f) {
-            shapeRenderer.rectLine(origenX, ALTURA_MANO_LATIGO, objetivoX, objetivoY, ancho);
-            return;
-        }
-
-        float control1X = MathUtils.lerp(origenX, objetivoX, 0.30f);
-        float control1Y = ALTURA_MANO_LATIGO + curva;
-        float control2X = MathUtils.lerp(origenX, objetivoX, 0.78f);
-        float control2Y = objetivoY + curva * 0.35f;
-        float anteriorX = origenX;
-        float anteriorY = ALTURA_MANO_LATIGO;
-        for (int segmento = 1; segmento <= 12; segmento++) {
-            float t = segmento / 12f;
-            float inverso = 1f - t;
-            float x = inverso * inverso * inverso * origenX
-                + 3f * inverso * inverso * t * control1X
-                + 3f * inverso * t * t * control2X
-                + t * t * t * objetivoX;
-            float y = inverso * inverso * inverso * ALTURA_MANO_LATIGO
-                + 3f * inverso * inverso * t * control1Y
-                + 3f * inverso * t * t * control2Y
-                + t * t * t * objetivoY;
-            shapeRenderer.rectLine(anteriorX, anteriorY, x, y, ancho);
-            anteriorX = x;
-            anteriorY = y;
-        }
     }
 
     private float getOrigenLatigoX(float jugadorX) {
@@ -248,23 +229,100 @@ public class BestiarioJefe {
         return ataqueActual;
     }
 
-    public void dibujar(SpriteBatch batch) {
-        TextureRegion frame = framesLatigo[0];
+    // Dibujar al jefe mirando hacia el lado donde esta Jorge.
+    // Elige la animacion segun direccion y estado y la dibuja alineada al piso.
+    public void dibujar(SpriteBatch batch, float jugadorX) {
+        boolean miraDerecha = jugadorX >= POSICION_CENTRO_X;
+        TextureRegion frame;
+        Medida medida;
         if (ataqueActual == Ataque.LATIGO) {
-            frame = animacionLatigo.getKeyFrame(tiempoAtaque, false);
+            frame = miraDerecha
+                ? ataqueDerecha.getKeyFrame(tiempoAtaque, false)
+                : ataqueIzquierda.getKeyFrame(tiempoAtaque, false);
+            medida = medidaAtaque;
+        } else {
+            frame = miraDerecha
+                ? estaticoDerecha.getKeyFrame(tiempoQuieto, true)
+                : estaticoIzquierda.getKeyFrame(tiempoQuieto, true);
+            medida = medidaEstatico;
         }
-        float ancho = TAMANO_LIENZO * ESCALA_JEFE;
-        float alto = TAMANO_LIENZO * ESCALA_JEFE;
-        float x = POSICION_CENTRO_X - ancho / 2f;
-        float y = ALTURA_PISO - (TAMANO_LIENZO - 476f) * ESCALA_JEFE;
+
+        // Apoyamos los pies en el piso y centramos el cuerpo en la misma posicion
+        // para las dos animaciones, asi el jefe no "salta" ni se corre al atacar.
+        float tamano = medida.canvas * escalaVisual;
+        float x = POSICION_CENTRO_X - medida.centroPiesX * escalaVisual;
+        float y = ALTURA_PISO - (medida.canvas - 1f - medida.filaPiesY) * escalaVisual;
+
         batch.setColor(1f, 1f, 1f, 1f);
         if (tiempoDanio > 0f && ((int) (tiempoDanio * 40f) % 2) == 0) {
-            batch.setColor(1f, 0.5f, 0.5f, 1f);
+            batch.setColor(1f, 0.5f, 0.5f, 1f); // parpadeo rojo al recibir un golpe
         }
-        batch.draw(frame, x, y, ancho, alto);
+        batch.draw(frame, x, y, tamano, tamano);
         batch.setColor(1f, 1f, 1f, 1f);
     }
 
+    // Cargar una animacion: los archivos son 01.png, 02.png... dentro de una carpeta.
+    private Animation<TextureRegion> cargarAnimacion(String ruta, int cantidad, float duracionFrame) {
+        TextureRegion[] frames = new TextureRegion[cantidad];
+        for (int indice = 0; indice < cantidad; indice++) {
+            String nombre = String.format("%s/%02d.png", ruta, indice + 1);
+            Texture textura = new Texture(Gdx.files.internal(nombre));
+            texturas.add(textura);
+            frames[indice] = new TextureRegion(textura);
+        }
+        return new Animation<>(duracionFrame, frames);
+    }
+
+    // Recorrer todas las imagenes del conjunto para saber donde estan los pies y
+    // cuanto mide el dibujo. Miramos la franja de abajo (los pies) para centrar el
+    // cuerpo: el latigo se estira hacia un costado y no debe mover al jefe.
+    private Medida medirConjunto(String ruta, int cantidad, float canvas) {
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int maxX = -1;
+        int maxY = -1;
+
+        for (int indice = 0; indice < cantidad; indice++) {
+            Pixmap pixmap = new Pixmap(Gdx.files.internal(String.format("%s/%02d.png", ruta, indice + 1)));
+            for (int pixelY = 0; pixelY < pixmap.getHeight(); pixelY++) {
+                for (int pixelX = 0; pixelX < pixmap.getWidth(); pixelX++) {
+                    if ((pixmap.getPixel(pixelX, pixelY) & 0xff) != 0) {
+                        minX = Math.min(minX, pixelX);
+                        minY = Math.min(minY, pixelY);
+                        maxX = Math.max(maxX, pixelX);
+                        maxY = Math.max(maxY, pixelY);
+                    }
+                }
+            }
+            pixmap.dispose();
+        }
+
+        // Segunda pasada: centro horizontal de los pixeles de la franja de los pies.
+        int banda = Math.max(1, Math.round((maxY - minY + 1) * FRACCION_BANDA_PIES));
+        int piesMinX = Integer.MAX_VALUE;
+        int piesMaxX = -1;
+        for (int indice = 0; indice < cantidad; indice++) {
+            Pixmap pixmap = new Pixmap(Gdx.files.internal(String.format("%s/%02d.png", ruta, indice + 1)));
+            for (int pixelY = maxY - banda; pixelY <= maxY; pixelY++) {
+                for (int pixelX = 0; pixelX < pixmap.getWidth(); pixelX++) {
+                    if ((pixmap.getPixel(pixelX, pixelY) & 0xff) != 0) {
+                        piesMinX = Math.min(piesMinX, pixelX);
+                        piesMaxX = Math.max(piesMaxX, pixelX);
+                    }
+                }
+            }
+            pixmap.dispose();
+        }
+
+        Medida medida = new Medida();
+        medida.centroPiesX = (piesMinX + piesMaxX + 1f) / 2f;
+        medida.filaPiesY = maxY;
+        medida.altoVisible = maxY - minY + 1f;
+        medida.canvas = canvas;
+        return medida;
+    }
+
+    // Libera todas las texturas usadas por las animaciones del jefe.
     public void dispose() {
         for (Texture textura : texturas) {
             textura.dispose();

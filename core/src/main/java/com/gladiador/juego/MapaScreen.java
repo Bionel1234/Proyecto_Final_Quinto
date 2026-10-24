@@ -2,6 +2,7 @@ package com.gladiador.juego;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 import com.badlogic.gdx.Gdx;
@@ -18,68 +19,88 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
+// Nivel de combate: un mapa largo donde Jorge debe sobrevivir a 3 oleadas de enemigos
+// y despues puede salir por la puerta del fondo.
 public class MapaScreen implements Screen {
 
     public static final int ANCHO = 1366;
     public static final int ALTO = 768;
-    private static final float ANCHO_MAPA = 2089f;
-    private static final float ALTURA_SUELO = 150f;
-    private static final float DISTANCIA_SEGUNDA_PUERTA = 320f;
-    private static final float DISTANCIA_MINIMA_APARICION = 450f;
+    private static final float ANCHO_MAPA_BASE = 2089f;
+    private static final float ALTURA_SUELO = 150f;   // altura donde todos pisan
+    private static final float DISTANCIA_PUERTA = 320f; // tan cerca hay que estar de la salida
+    private static final float DISTANCIA_MINIMA_APARICION = 450f; // lejos de Jorge al aparecer
     private static final float DISTANCIA_MINIMA_ENTRE_ENEMIGOS = 230f;
+    private static final float DURACION_AVISO_OLEADA = 2.5f; // cuanto se ve el cartel "Oleada X"
     private static final int CANTIDAD_OLEADAS = 3;
-    private static final int[] ENEMIGOS_POR_OLEADA = {3, 5, 7};
-
+    private static final int[] ENEMIGOS_POR_OLEADA = {3, 5, 7}; // cada oleada es mas dura
+    private static final String[] IMAGENES_OLEADA = {"ui/oleada_1.png", "ui/oleada_2.png", "ui/oleada_3.png"};
     private final MainClass game;
-    private final String nombreZona;
+    private final String nombreZona;   // "Zona 1" o "Zona 2": cambia enemigos y texto
     private final int numeroNivel;
-    private final String fondoMapaRuta;
+    private final int etapaProgresion;
+    private float anchoMapa = ANCHO_MAPA_BASE;
+
     private OrthographicCamera camera;
     private Viewport viewport;
-    private Texture fondoMapa;
+    private Texture fondoMapa;          // fondo fijo de la Zona 1
+    private Texture fondoZona2;         // fondo nuevo de la Zona 2 (o null)
     private Texture pantallaGameOver;
+    private Texture[] imagenesOleada;
     private ArrayList<Enemigo> enemigos;
     private Jugador jugador;
     private Vida vida;
     private BitmapFont fuente;
-    private ShapeRenderer shapeRenderer;
-    private List<Rectangle> plataformas;
+    private ShapeRenderer shapeRenderer;  // para dibujar las plataformas (rectangulos)
+    private List<Rectangle> plataformas;  // las dos plataformas sobre las que se puede saltar
+
+    // Estado del nivel.
     private boolean finDelJuego;
     private int oleadaActual;
     private boolean oleadasCompletadas;
+    private float tiempoAvisoOleada;
 
-    // Efectos de combate: pausa breve al golpear, temblor de camara y aviso de parry.
+    // "Jugo" del combate: el juego se congela un instante al golpear (hitstop),
+    // la camara tiembla con los golpes fuertes y el parry muestra un cartel.
     private float tiempoHitstop;
     private float tiempoTemblor;
     private float duracionTemblor;
     private float intensidadTemblor;
     private float tiempoTextoParry;
 
-    public MapaScreen(MainClass game) {
-        this(game, "Zona 1", 1, "Mapa 1/scene_animated.png");
-    }
-
+    // Guarda la zona y el nivel, y convierte esa combinacion al identificador de progreso.
     public MapaScreen(MainClass game, String nombreZona, int numeroNivel) {
-        this(game, nombreZona, numeroNivel, "Mapa 1/scene_animated.png");
-    }
-
-    public MapaScreen(MainClass game, String nombreZona, int numeroNivel, String fondoMapaRuta) {
         this.game = game;
-        this.nombreZona = nombreZona == null || nombreZona.isEmpty() ? "Zona 1" : nombreZona;
-        this.numeroNivel = numeroNivel > 0 ? numeroNivel : 1;
-        this.fondoMapaRuta = fondoMapaRuta == null || fondoMapaRuta.isEmpty() ? "Mapa 1/scene_animated.png" : fondoMapaRuta;
+        this.nombreZona = nombreZona;
+        this.numeroNivel = numeroNivel;
+        if ("Zona 1".equals(nombreZona)) {
+            etapaProgresion = numeroNivel == 2
+                ? MainClass.ETAPA_ZONA1_NIVEL2 : MainClass.ETAPA_ZONA1_NIVEL1;
+        } else {
+            etapaProgresion = MainClass.ETAPA_ZONA2;
+        }
     }
 
+    // Se llama una sola vez al abrir el nivel: crear todo.
     @Override
     public void show() {
+        // Inicializa los recursos y el estado cuando LibGDX muestra este nivel.
         configurarCamara();
-        fondoMapa = new Texture(Gdx.files.internal(fondoMapaRuta));
-        pantallaGameOver = new Texture(Gdx.files.internal("gameover/pantalla.png"));
+        fondoMapa = new Texture(Gdx.files.internal("Mapa 1/scene_animated.png"));
+        pantallaGameOver = new Texture(Gdx.files.internal("ui/gameover.png"));
+        if ("Zona 2".equals(nombreZona)) {
+            fondoZona2 = new Texture(Gdx.files.internal("Zona 2/fondo.png"));
+            fondoZona2.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        }
+        imagenesOleada = new Texture[CANTIDAD_OLEADAS];
+        for (int i = 0; i < CANTIDAD_OLEADAS; i++) {
+            imagenesOleada[i] = new Texture(Gdx.files.internal(IMAGENES_OLEADA[i]));
+        }
         jugador = new Jugador(250f, 150f);
         vida = new Vida();
         enemigos = new ArrayList<>();
         fuente = new BitmapFont();
         shapeRenderer = new ShapeRenderer();
+        // Dos plataformas flotantes: x, y (borde de abajo), ancho, alto.
         plataformas = Arrays.asList(
             new Rectangle(850f, 260f, 220f, 24f),
             new Rectangle(1160f, 360f, 220f, 24f)
@@ -103,12 +124,14 @@ public class MapaScreen implements Screen {
 
     @Override
     public void render(float deltaReal) {
+        // Avanza el juego y dibuja un frame usando el tiempo desde el frame anterior.
         if (finDelJuego) {
             dibujarGameOver();
             return;
         }
 
-        // Hitstop: el juego se "congela" una fraccion de segundo al golpear. Se siente mucho mas fuerte.
+        // Hitstop: durante esas fracciones de segundo el delta pasa a ser 0
+        // (todo se "congela" menos los timers de efecto, que usan el tiempo real).
         float delta = deltaReal;
         if (tiempoHitstop > 0f) {
             tiempoHitstop -= deltaReal;
@@ -120,66 +143,68 @@ public class MapaScreen implements Screen {
         if (tiempoTextoParry > 0f) {
             tiempoTextoParry = Math.max(0f, tiempoTextoParry - deltaReal);
         }
-
-        jugador.actualizar(delta, ALTURA_SUELO, ANCHO_MAPA - 220f, plataformas);
-
-        float scroll = Math.min(Math.max(0f, jugador.getX() - 180f), ANCHO_MAPA - ANCHO);
-
-        int enemigosVivos = 0;
-        for (Enemigo enemigo : enemigos) {
-            if (enemigo.estaVivo()) {
-                enemigosVivos++;
-            }
+        if (tiempoAvisoOleada > 0f) {
+            tiempoAvisoOleada = Math.max(0f, tiempoAvisoOleada - deltaReal);
         }
 
-        // Los enemigos muertos tambien se actualizan (para desvanecerse).
-        int posicionObjetivo = 0;
+        // 1) Jorge se mueve, salta y puede caer sobre las plataformas.
+        jugador.actualizar(delta, ALTURA_SUELO, anchoMapa - 220f, plataformas);
+
+        // 2) La camara sigue a Jorge: el fondo se desplaza ("scroll") con el.
+        float scroll = Math.min(Math.max(0f, jugador.getX() - 180f), anchoMapa - ANCHO);
+
+        // 3) Actualizar enemigos. Los muertos tambien (para terminar de desvanecerse).
+        //    Se los ordena por posicion para que cada uno "apunte" a un lugar distinto
+        //    alrededor de Jorge y no se amontonen todos en el mismo punto.
+        ArrayList<Enemigo> enemigosVivos = new ArrayList<>();
+        for (Enemigo enemigo : enemigos) {
+            if (enemigo.estaVivo()) {
+                enemigosVivos.add(enemigo);
+            }
+        }
+        enemigosVivos.sort(Comparator.comparingDouble(Enemigo::getCentroX));
+        int cantidadVivos = enemigosVivos.size();
+
         for (Enemigo enemigo : enemigos) {
             float desplazamientoObjetivoX = 0f;
             if (enemigo.estaVivo()) {
-                desplazamientoObjetivoX = (posicionObjetivo - (enemigosVivos - 1) / 2f)
+                int posicion = enemigosVivos.indexOf(enemigo);
+                desplazamientoObjetivoX = (posicion - (cantidadVivos - 1) / 2f)
                     * Enemigo.separacionObjetivos();
-                posicionObjetivo++;
             }
-            enemigo.actualizar(
-                delta,
-                jugador.getX(),
-                jugador.getY(),
-                0f,
-                ANCHO_MAPA,
-                desplazamientoObjetivoX
-            );
+            enemigo.actualizar(delta, jugador.getX(), jugador.getY(), 0f, anchoMapa, desplazamientoObjetivoX);
         }
         separarEnemigos();
 
+        // 4) Resolver los golpes de este frame.
         Rectangle hitboxJugador = jugador.getHitbox();
         for (Enemigo enemigo : enemigos) {
             if (!enemigo.estaVivo()) {
                 continue;
             }
 
-            // 1) Jorge golpea: solo cuenta durante los frames del tajo.
-            if (jugador.estaAtaqueActivo() && jugador.getAreaDeAtaque().overlaps(enemigo.getHitbox())) {
-                float fuerzaEmpuje = 300f;
-                if (enemigo.recibirGolpe(jugador.getNumeroAtaque(), jugador.getDireccionAtaque(), fuerzaEmpuje)) {
+            // 4a) Jorge golpea: solo cuenta durante los frames activos del tajo.
+            if (jugador.estaAtaqueActivo()
+                    && jugador.getAreaDeAtaque().overlaps(enemigo.getHitbox())) {
+                if (enemigo.recibirGolpe(jugador.getNumeroAtaque(), jugador.getDireccionAtaque(), 300f)) {
                     activarHitstop(0.06f);
                     activarTemblor(0.08f, 4f);
                 }
             }
 
-            // 2) El enemigo golpea: tambien tiene una ventana de impacto.
-            //    Si Jorge lo golpeo antes, el golpe del enemigo se cancela solo.
-            boolean jugadorEnAreaDeAtaque = enemigo.impactoActivo()
+            // 4b) El enemigo golpea: tambien tiene una ventana de impacto.
+            //     Si Jorge lo golpeo antes, el ataque del enemigo se cancelo solo.
+            boolean jugadorRecibiendo = enemigo.impactoActivo()
                 && enemigo.getAreaDeAtaque().overlaps(hitboxJugador)
                 && Math.abs(jugador.getY() - enemigo.getY()) <= enemigo.getAlturaAtaqueMax() + 18f;
-            if (jugadorEnAreaDeAtaque) {
+            if (jugadorRecibiendo) {
                 enemigo.resolverImpacto();
                 float empujeAJugador = jugador.getCentroX() >= enemigo.getCentroX() ? 1f : -1f;
                 if (jugador.esInvulnerable()) {
-                    // Jorge todavia esta en su tiempo de gracia: el golpe no hace nada.
+                    // Tiempo de gracia: el golpe no hace nada.
                 } else if (jugador.bloqueaGolpeDesde(enemigo.getCentroX())) {
                     if (jugador.estaEnVentanaParry()) {
-                        // Parry: bloqueo justo, el enemigo queda aturdido y vulnerable.
+                        // PARRY: bloqueo justo, el enemigo queda aturdido y vulnerable.
                         enemigo.aturdir(1.1f, -empujeAJugador, 380f);
                         activarHitstop(0.12f);
                         activarTemblor(0.15f, 6f);
@@ -190,6 +215,7 @@ public class MapaScreen implements Screen {
                         activarTemblor(0.08f, 3f);
                     }
                 } else {
+                    // Golpe limpio: baja la vida y Jorge queda aturdido un momento.
                     vida.recibirGolpe(enemigo.getDano());
                     jugador.recibirImpacto(empujeAJugador);
                     activarHitstop(0.08f);
@@ -201,6 +227,7 @@ public class MapaScreen implements Screen {
             }
         }
 
+        // 5) Sacar de la lista a los enemigos que ya terminaron de desvanecerse.
         enemigos.removeIf(enemigo -> {
             if (!enemigo.puedeEliminarse()) {
                 return false;
@@ -208,6 +235,8 @@ public class MapaScreen implements Screen {
             enemigo.dispose();
             return true;
         });
+
+        // 6) Si no queda ninguno, arrancar la proxima oleada (o dar el nivel por superado).
         if (enemigos.isEmpty() && !oleadasCompletadas) {
             if (oleadaActual < CANTIDAD_OLEADAS) {
                 oleadaActual++;
@@ -217,6 +246,7 @@ public class MapaScreen implements Screen {
             }
         }
 
+        // 7) Limpiar la pantalla y aplicar el temblor de camara.
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
@@ -227,6 +257,7 @@ public class MapaScreen implements Screen {
         float temblorX = 0f;
         float temblorY = 0f;
         if (tiempoTemblor > 0f && duracionTemblor > 0f) {
+            // El temblor se va apagando: usa la fraccion de tiempo que resta.
             float fuerza = intensidadTemblor * (tiempoTemblor / duracionTemblor);
             temblorX = MathUtils.random(-fuerza, fuerza);
             temblorY = MathUtils.random(-fuerza, fuerza);
@@ -235,8 +266,11 @@ public class MapaScreen implements Screen {
         camera.update();
         game.batch.setProjectionMatrix(camera.combined);
 
+        // 8) Dibujar: fondo desplazado, plataformas, personajes e interfaz.
         game.batch.begin();
-        game.batch.draw(fondoMapa, -scroll, 0f, ANCHO_MAPA, ALTO);
+        Texture fondoActual = mirarFondoActual();
+        float altoFondo = anchoMapa * fondoActual.getHeight() / fondoActual.getWidth();
+        game.batch.draw(fondoActual, -scroll, 0f, anchoMapa, altoFondo);
         game.batch.end();
 
         dibujarPlataformas(scroll);
@@ -250,23 +284,20 @@ public class MapaScreen implements Screen {
         fuente.draw(game.batch, nombreZona + ": Nivel " + numeroNivel, 80f, 710f);
         if (oleadasCompletadas) {
             fuente.draw(game.batch, "¡Has superado las 3 oleadas!", 700f, 710f);
-            if (jugador.getX() >= ANCHO_MAPA - DISTANCIA_SEGUNDA_PUERTA) {
-                fuente.draw(
-                    game.batch,
-                    "Pulsa ENTER para volver al lobby",
-                    ANCHO_MAPA - 300f - scroll,
-                    245f
-                );
+            if (jugador.getX() >= anchoMapa - DISTANCIA_PUERTA) {
+                fuente.draw(game.batch, "Pulsa ENTER para volver al lobby",
+                    anchoMapa - 300f - scroll, 245f);
             }
-        } else {
-            fuente.draw(
-                game.batch,
-                "Oleada " + oleadaActual + " de " + CANTIDAD_OLEADAS,
-                750f,
-                710f
-            );
+        } else if (tiempoAvisoOleada > 0f) {
+            // Cartel de "Oleada 1/2/3" centrado arriba.
+            Texture imagenOleada = imagenesOleada[oleadaActual - 1];
+            float anchoImagen = 780f;
+            float altoImagen = anchoImagen * imagenOleada.getHeight() / imagenOleada.getWidth();
+            game.batch.draw(imagenOleada, (ANCHO - anchoImagen) / 2f, ALTO - altoImagen - 30f,
+                anchoImagen, altoImagen);
         }
         if (tiempoTextoParry > 0f) {
+            // El cartel "PARRY!" flotando sobre Jorge.
             fuente.getData().setScale(1.6f);
             fuente.setColor(0.6f, 0.9f, 1f, 1f);
             fuente.draw(game.batch, "¡PARRY!", jugador.getX() - scroll + 35f, jugador.getY() + 200f);
@@ -275,15 +306,13 @@ public class MapaScreen implements Screen {
         }
         game.batch.end();
 
+        // 9) Salir del nivel o del juego.
         if (oleadasCompletadas
-            && jugador.getX() >= ANCHO_MAPA - DISTANCIA_SEGUNDA_PUERTA
+            && jugador.getX() >= anchoMapa - DISTANCIA_PUERTA
             && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
             Monedas.recompensarPrimerMapa();
-            if ("Zona 2".equalsIgnoreCase(nombreZona)) {
-                game.registrarZona2Completada();
-            } else {
-                game.registrarZona1Completada();
-            }
+            game.registrarEtapaCompletada(etapaProgresion);
+            vida.curarCompleto();
             game.setScreen(new JuegoScreen(game));
             return;
         }
@@ -293,17 +322,25 @@ public class MapaScreen implements Screen {
         }
     }
 
+    // Conserva la pausa de combate mas larga si varios impactos coinciden.
     private void activarHitstop(float segundos) {
         tiempoHitstop = Math.max(tiempoHitstop, segundos);
     }
 
+    // Guarda duracion e intensidad para que render aplique el temblor de camara.
     private void activarTemblor(float segundos, float intensidad) {
         tiempoTemblor = segundos;
         duracionTemblor = segundos;
         intensidadTemblor = intensidad;
     }
 
-    // Detecta choques reales y manda a cada enemigo en direccion opuesta.
+    // Devolver el fondo fijo que corresponde a la zona.
+    private Texture mirarFondoActual() {
+        return fondoZona2 == null ? fondoMapa : fondoZona2;
+    }
+
+    // Si dos enemigos se superponen, empujarlos en direcciones opuestas.
+    // Revisa pares de enemigos vivos y separa los que tengan hitboxes superpuestas.
     private void separarEnemigos() {
         for (int i = 0; i < enemigos.size(); i++) {
             Enemigo a = enemigos.get(i);
@@ -318,7 +355,7 @@ public class MapaScreen implements Screen {
                 Rectangle hitboxA = a.getHitbox();
                 Rectangle hitboxB = b.getHitbox();
                 if (!hitboxA.overlaps(hitboxB)) {
-                    continue;
+                    continue; // no se estan tocando
                 }
 
                 float diferencia = b.getCentroX() - a.getCentroX();
@@ -331,28 +368,26 @@ public class MapaScreen implements Screen {
 
                 a.aplicarSeparacion(-direccion * separacion);
                 b.aplicarSeparacion(direccion * separacion);
-                a.reaccionarAlChoque(-direccion);
-                b.reaccionarAlChoque(direccion);
             }
         }
     }
 
+    // Crear los enemigos de la oleada actual.
     private void iniciarOleada(float jugadorX) {
+        // Vacía la ronda anterior y crea la cantidad de enemigos de esta oleada.
         enemigos.clear();
+        tiempoAvisoOleada = DURACION_AVISO_OLEADA;
         int cantidadEnemigos = ENEMIGOS_POR_OLEADA[oleadaActual - 1];
         for (int i = 0; i < cantidadEnemigos; i++) {
-            enemigos.add(crearEnemigo(jugadorX));
+            float x = buscarPosicionAparicion(jugadorX);
+            float velocidadBase = 80f + MathUtils.random(0f, 24f) + oleadaActual * 4f;
+            enemigos.add(new Enemigo(x, ALTURA_SUELO, velocidadBase, seleccionarTipoEnemigo(), nombreZona));
         }
     }
 
-    private Enemigo crearEnemigo(float jugadorX) {
-        float x = buscarPosicionAparicion(jugadorX);
-        float velocidadBase = 80f + MathUtils.random(0f, 24f) + oleadaActual * 4f;
-        return new Enemigo(x, ALTURA_SUELO, velocidadBase, seleccionarTipoEnemigo(), nombreZona);
-    }
-
+    // Elegir el tipo al azar, con mas probabilidad de tipos duros en las oleadas avanzadas.
     private Enemigo.TipoEnemigo seleccionarTipoEnemigo() {
-        float aleatorio = MathUtils.random();
+        float aleatorio = MathUtils.random(); // numero entre 0 y 1
         if (oleadaActual >= 3 && aleatorio < 0.18f + (oleadaActual - 1) * 0.10f) {
             return Enemigo.TipoEnemigo.ELITE;
         }
@@ -365,9 +400,12 @@ public class MapaScreen implements Screen {
         return Enemigo.TipoEnemigo.BASICO;
     }
 
+    // Probar hasta 80 posiciones al azar y quedarse con la primera "buena":
+    // lejos de Jorge y lejos de otros enemigos.
+    // Busca un sitio de aparicion suficientemente lejos del jugador y otros enemigos.
     private float buscarPosicionAparicion(float jugadorX) {
         float limiteMinimo = 60f;
-        float limiteMaximo = ANCHO_MAPA - 220f;
+        float limiteMaximo = anchoMapa - 220f;
         float mejorPosicion = limiteMinimo;
         float mejorDistancia = -1f;
 
@@ -382,13 +420,14 @@ public class MapaScreen implements Screen {
             }
             if (distanciaJugador >= DISTANCIA_MINIMA_APARICION
                 && distanciaEnemigos >= DISTANCIA_MINIMA_ENTRE_ENEMIGOS) {
-                return posicion;
+                return posicion; // encontramos un lugar bueno, no seguimos buscando
             }
         }
 
-        return mejorPosicion;
+        return mejorPosicion; // si no hubo una perfecta, usar la mejor encontrada
     }
 
+    // Devuelve la distancia al enemigo mas proximo a una posicion candidata.
     private float distanciaAlEnemigoMasCercano(float posicion) {
         if (enemigos.isEmpty()) {
             return Float.MAX_VALUE;
@@ -400,21 +439,23 @@ public class MapaScreen implements Screen {
         return distanciaMinima;
     }
 
+    // Las plataformas se dibujan con rectangulos (no tienen imagen).
     private void dibujarPlataformas(float desplazamientoX) {
         shapeRenderer.setProjectionMatrix(camera.combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         for (Rectangle plataforma : plataformas) {
             float x = plataforma.x - desplazamientoX;
-            shapeRenderer.setColor(0.20f, 0.20f, 0.22f, 1f);
+            shapeRenderer.setColor(0.20f, 0.20f, 0.22f, 1f);   // cuerpo oscuro
             shapeRenderer.rect(x, plataforma.y, plataforma.width, plataforma.height);
-            shapeRenderer.setColor(0.42f, 0.40f, 0.36f, 1f);
+            shapeRenderer.setColor(0.42f, 0.40f, 0.36f, 1f);   // borde de arriba clarito
             shapeRenderer.rect(x, plataforma.y + plataforma.height - 5f, plataforma.width, 5f);
-            shapeRenderer.setColor(0.10f, 0.10f, 0.11f, 1f);
+            shapeRenderer.setColor(0.10f, 0.10f, 0.11f, 1f);   // sombra debajo
             shapeRenderer.rect(x, plataforma.y, plataforma.width, 3f);
         }
         shapeRenderer.end();
     }
 
+    // Pantalla de GAME OVER con dos botones clickeables sobre la imagen.
     private void dibujarGameOver() {
         camera.position.set(ANCHO / 2f, ALTO / 2f, 0f);
         camera.update();
@@ -428,9 +469,10 @@ public class MapaScreen implements Screen {
 
         game.batch.setProjectionMatrix(camera.combined);
         game.batch.begin();
-        game.batch.draw(fondoMapa, 0f, 0f, ANCHO, ALTO);
+        game.batch.draw(mirarFondoActual(), 0f, 0f, ANCHO, ALTO);
         game.batch.end();
 
+        // Oscurecer el fondo para que se lea el cartel.
         shapeRenderer.setProjectionMatrix(camera.combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(0f, 0f, 0f, 0.7f);
@@ -441,31 +483,36 @@ public class MapaScreen implements Screen {
         game.batch.draw(pantallaGameOver, 0f, 0f, ANCHO, ALTO);
         game.batch.end();
 
+        // La imagen de game over mide 1671x941 y trae dos botones dibujados:
+        // "REINTENTAR" (repetir el nivel) y "VOLVER AL MENU" (ir al lobby).
+        // Sus cajas estan medidas sobre esa imagen y se escalan a la pantalla.
         Vector3 mouse = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f);
-        viewport.unproject(mouse);
-        float escalaX = ANCHO / 1536f;
-        float escalaY = ALTO / 1024f;
-        float volverX = 417f * escalaX;
-        float volverAncho = (1120f - 417f) * escalaX;
-        float volverY = ALTO - 830f * escalaY;
-        float volverAlto = (830f - 678f) * escalaY;
-        float salirX = 473f * escalaX;
-        float salirAncho = (1065f - 473f) * escalaX;
-        float salirY = ALTO - 989f * escalaY;
-        float salirAlto = (989f - 836f) * escalaY;
+        viewport.unproject(mouse); // pasar la posicion del mouse al plano del juego
+        float escalaX = ANCHO / 1671f;
+        float escalaY = ALTO / 941f;
+        float reintentarX = 600f * escalaX;
+        float reintentarAncho = (1065f - 600f) * escalaX;
+        float reintentarY = ALTO - 580f * escalaY;
+        float reintentarAlto = (580f - 485f) * escalaY;
+        float volverX = 600f * escalaX;
+        float volverAncho = (1065f - 600f) * escalaX;
+        float volverY = ALTO - 692f * escalaY;
+        float volverAlto = (692f - 598f) * escalaY;
+        boolean reintentarSeleccionado = mouse.x >= reintentarX && mouse.x <= reintentarX + reintentarAncho
+            && mouse.y >= reintentarY && mouse.y <= reintentarY + reintentarAlto;
         boolean volverSeleccionado = mouse.x >= volverX && mouse.x <= volverX + volverAncho
             && mouse.y >= volverY && mouse.y <= volverY + volverAlto;
-        boolean salirSeleccionado = mouse.x >= salirX && mouse.x <= salirX + salirAncho
-            && mouse.y >= salirY && mouse.y <= salirY + salirAlto;
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
-            if (volverSeleccionado) {
-                game.setScreen(new JuegoScreen(game));
-            } else if (salirSeleccionado) {
-                Gdx.app.exit();
+            if (reintentarSeleccionado) {
+                Vida.restablecer();
+                game.setScreen(new MapaScreen(game, nombreZona, numeroNivel)); // repetir el nivel
+            } else if (volverSeleccionado) {
+                game.setScreen(new JuegoScreen(game)); // volver al lobby
             }
         }
     }
 
+    // LibGDX notifica cambios de tamano para que el viewport conserve la proporcion.
     @Override
     public void resize(int width, int height) {
         if (viewport != null) {
@@ -473,25 +520,39 @@ public class MapaScreen implements Screen {
         }
     }
 
+    // El nivel no requiere tareas adicionales al pausar, reanudar o esconderse.
     @Override
     public void pause() {
     }
 
+    // No hay datos que necesiten restaurarse al volver de una pausa.
     @Override
     public void resume() {
     }
 
+    // Esta pantalla no mantiene musica propia; al ocultarse no hace nada adicional.
     @Override
     public void hide() {
     }
 
     @Override
     public void dispose() {
+        // Libera todos los recursos que esta pantalla cargo o que sus personajes poseen.
         if (fondoMapa != null) {
             fondoMapa.dispose();
         }
+        if (fondoZona2 != null) {
+            fondoZona2.dispose();
+        }
         if (pantallaGameOver != null) {
             pantallaGameOver.dispose();
+        }
+        if (imagenesOleada != null) {
+            for (Texture imagenOleada : imagenesOleada) {
+                if (imagenOleada != null) {
+                    imagenOleada.dispose();
+                }
+            }
         }
         for (Enemigo enemigo : enemigos) {
             if (enemigo != null) {

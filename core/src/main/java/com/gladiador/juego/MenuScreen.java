@@ -14,158 +14,81 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
-// Menu principal del juego.
+// Menu principal: fondo animado y tres botones (Jugar, Controles, Salir).
+// Los botones son imagenes; se eligen con el mouse y "crecen" al pasar por encima.
 public class MenuScreen implements Screen {
 
-    // Referencia al juego y objetos necesarios para dibujar.
     private final MainClass game;
     private OrthographicCamera camera;
     private Viewport viewport;
 
-    // Fondo animado del menu.
+    // Fondo animado (16 cuadros) y su timer.
     private Texture[] fondos;
     private Animation<TextureRegion> animacionFondo;
     private float tiempoFondo;
 
-    // Botones en este orden: jugar, controles y salir.
+    // Los tres botones, en orden: jugar, controles y salir.
     private final Texture[] botones = new Texture[3];
-    private final float[] escalas = {1f, 1f, 1f};
-    private final boolean[] hover = {false, false, false};
+    private final float[] escalas = {1f, 1f, 1f};      // tamano actual de cada boton
+    private final boolean[] hover = {false, false, false};      // el mouse esta encima?
     private final boolean[] hoverAnterior = {false, false, false};
 
-    // Sonidos del menu.
+    // Musica de fondo y sonido del click.
     private Music musica;
-    private Sound sonidoHover;
     private Sound sonidoClick;
     private boolean mousePresionado;
 
-    // Medidas y posiciones del menu.
+    // Medidas del menu.
     private static final int ANCHO = 1366;
     private static final int ALTO = 768;
     private static final int CANTIDAD_FONDOS = 16;
     private static final float ANCHO_BOTON = 420f;
-    private static final float SEPARACION_BOTONES = -100f;
-    private static final float ESCALA_HOVER = 1.08f;
+    private static final float SEPARACION_BOTONES = -100f; // negativa: se solapan un poco
+    private static final float ESCALA_HOVER = 1.08f;       // cuanto crece al pasar el mouse
 
-    // Recibir el juego principal.
+    // Guarda una referencia al juego para poder cambiar de pantalla o salir.
     public MenuScreen(MainClass game) {
         this.game = game;
     }
 
+    // Cargar camara, fondos, botones y sonidos.
+    // Carga los recursos y prepara el sistema de coordenadas del menu.
     @Override
     public void show() {
-        // Preparar la camara y cargar todos los recursos.
-        configurarCamara();
-        cargarFondo();
-        cargarBotones();
-        cargarSonidos();
-    }
-
-    // Crear la camara 2D del menu.
-    private void configurarCamara() {
         camera = new OrthographicCamera();
         viewport = new FitViewport(ANCHO, ALTO, camera);
         viewport.apply(true);
         camera.position.set(ANCHO / 2f, ALTO / 2f, 0f);
         camera.update();
-    }
 
-    // Cargar los 16 frames del fondo.
-    private void cargarFondo() {
+        // Los 16 cuadros del fondo animado.
         fondos = new Texture[CANTIDAD_FONDOS];
         TextureRegion[] regiones = new TextureRegion[CANTIDAD_FONDOS];
-
         for (int i = 0; i < CANTIDAD_FONDOS; i++) {
             fondos[i] = new Texture(Gdx.files.internal("menu/frame_" + (i + 1) + ".png"));
             regiones[i] = new TextureRegion(fondos[i]);
         }
-
         animacionFondo = new Animation<TextureRegion>(0.15f, regiones);
+
+        // Las imagenes de los botones.
+        botones[0] = new Texture(Gdx.files.internal("menu/jugar.png"));
+        botones[1] = new Texture(Gdx.files.internal("menu/controles.png"));
+        botones[2] = new Texture(Gdx.files.internal("menu/salir.png"));
+
+        // Musica y sonido del click.
+        musica = Gdx.audio.newMusic(Gdx.files.internal("menu/musica_menu.mp3"));
+        musica.setLooping(true);
+        musica.setVolume(0.7f);
+        musica.play();
+        sonidoClick = Gdx.audio.newSound(Gdx.files.internal("menu/musca_boton_inicio.mp3"));
     }
 
-    // Cargar las imagenes de jugar, controles y salir.
-    private void cargarBotones() {
-        botones[0] = cargarTextura("menu/jugar.png");
-        botones[1] = cargarTextura("menu/controles.png");
-        botones[2] = cargarTextura("menu/salir.png");
-    }
-
-    // Cargar musica y efectos. Si falta un efecto, el menu sigue funcionando.
-    private void cargarSonidos() {
-        musica = cargarMusica("menu/musica_menu.mp3");
-        // No se carga un sonido de hover porque el proyecto no tiene ese archivo.
-        sonidoHover = null;
-        sonidoClick = cargarSonido("menu/musca_boton_inicio.mp3");
-
-        if (musica != null) {
-            musica.setLooping(true);
-            musica.setVolume(0.7f);
-            musica.play();
-        }
-    }
-
-    // Cargar una imagen opcional.
-    private Texture cargarTextura(String ruta) {
-        try {
-            return new Texture(Gdx.files.internal(ruta));
-        } catch (Exception error) {
-            Gdx.app.error("MenuScreen", "No se pudo cargar " + ruta, error);
-            return null;
-        }
-    }
-
-    // Cargar un sonido opcional.
-    private Sound cargarSonido(String ruta) {
-        try {
-            return Gdx.audio.newSound(Gdx.files.internal(ruta));
-        } catch (Exception error) {
-            Gdx.app.error("MenuScreen", "No se pudo cargar " + ruta, error);
-            return null;
-        }
-    }
-
-    // Cargar la musica del menu.
-    private Music cargarMusica(String ruta) {
-        try {
-            return Gdx.audio.newMusic(Gdx.files.internal(ruta));
-        } catch (Exception error) {
-            Gdx.app.error("MenuScreen", "No se pudo cargar " + ruta, error);
-            return null;
-        }
-    }
-
+    // Actualiza la animacion, dibuja el menu y procesa la seleccion del usuario.
     @Override
     public void render(float delta) {
-        // Avanzar la animacion y limpiar toda la ventana.
         tiempoFondo += delta;
-        limpiarPantalla();
 
-        // Dibujar dentro del viewport logico.
-        camera.update();
-        game.batch.setProjectionMatrix(camera.combined);
-        TextureRegion fondo = animacionFondo.getKeyFrame(tiempoFondo, true);
-
-        game.batch.begin();
-        game.batch.draw(fondo, 0f, 0f, ANCHO, ALTO);
-
-        // Calcular la posicion de cada boton y detectar el mouse.
-        float[] alturas = obtenerAlturas();
-        float[] posicionesY = obtenerPosicionesY(alturas);
-        actualizarHover(posicionesY, alturas);
-
-        // Dibujar los botones con su animacion de hover.
-        for (int i = 0; i < botones.length; i++) {
-            escalas[i] = actualizarEscala(escalas[i], hover[i]);
-            dibujarBoton(i, posicionesY[i], alturas[i]);
-        }
-        game.batch.end();
-
-        // Revisar si el jugador presiono un boton.
-        procesarClick();
-    }
-
-    // Limpiar toda la pantalla y aplicar el viewport del juego.
-    private void limpiarPantalla() {
+        // Limpiar toda la ventana y encerrar el dibujo dentro del viewport.
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
@@ -173,124 +96,125 @@ public class MenuScreen implements Screen {
             viewport.getScreenX(), viewport.getScreenY(),
             viewport.getScreenWidth(), viewport.getScreenHeight()
         );
-    }
 
-    // Obtener la altura proporcional de cada boton.
-    private float[] obtenerAlturas() {
-        float[] alturas = new float[botones.length];
-        for (int i = 0; i < botones.length; i++) {
-            alturas[i] = botones[i] == null
-                ? 60f
-                : botones[i].getHeight() * ANCHO_BOTON / botones[i].getWidth();
+        camera.update();
+        game.batch.setProjectionMatrix(camera.combined);
+
+        // Dibujar el fondo animado (true = se repite siempre).
+        TextureRegion fondo = animacionFondo.getKeyFrame(tiempoFondo, true);
+        game.batch.begin();
+        game.batch.draw(fondo, 0f, 0f, ANCHO, ALTO);
+
+        // Calcular alto y posicion de cada boton segun su imagen.
+        float[] alturas = new float[3];
+        for (int i = 0; i < 3; i++) {
+            alturas[i] = botones[i].getHeight() * ANCHO_BOTON / botones[i].getWidth();
         }
-        return alturas;
-    }
+        // El primero se fija y los otros cuelgan debajo (con la separacion).
+        float[] posicionesY = new float[3];
+        posicionesY[0] = ALTO * 0.68f - 12f - alturas[0];
+        posicionesY[1] = posicionesY[0] - alturas[1] - SEPARACION_BOTONES;
+        posicionesY[2] = posicionesY[1] - alturas[2] - SEPARACION_BOTONES;
 
-    // Calcular la posicion vertical de cada boton.
-    private float[] obtenerPosicionesY(float[] alturas) {
-        float[] y = new float[3];
-        float primerBoton = ALTO * 0.68f - 12f - alturas[0];
-        y[0] = primerBoton;
-        y[1] = y[0] - alturas[1] - SEPARACION_BOTONES;
-        y[2] = y[1] - alturas[2] - SEPARACION_BOTONES;
-        return y;
-    }
-
-    // Detectar el boton que esta debajo del cursor.
-    private void actualizarHover(float[] posicionesY, float[] alturas) {
+        // ?El mouse esta sobre algun boton? (si dos se solapan, gana el de arriba)
         Vector3 mouse = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f);
         viewport.unproject(mouse);
-
-        for (int i = 0; i < botones.length; i++) {
-            hover[i] = dentroDelBoton(mouse.x, mouse.y, posicionesY[i], alturas[i]);
-            if (i > 0) hover[i] = hover[i] && !hover[i - 1];
-
-            if (hover[i] && !hoverAnterior[i] && sonidoHover != null) {
-                sonidoHover.play(0.9f);
+        for (int i = 0; i < 3; i++) {
+            float x = (ANCHO - ANCHO_BOTON) / 2f;
+            hover[i] = mouse.x >= x && mouse.x <= x + ANCHO_BOTON
+                && mouse.y >= posicionesY[i] && mouse.y <= posicionesY[i] + alturas[i];
+            if (i > 0) {
+                hover[i] = hover[i] && !hover[i - 1];
             }
-            hoverAnterior[i] = hover[i];
         }
-    }
 
-    // Comprobar si una posicion esta dentro de un boton.
-    private boolean dentroDelBoton(float x, float y, float posicionY, float altura) {
-        float posicionX = (ANCHO - ANCHO_BOTON) / 2f;
-        return x >= posicionX && x <= posicionX + ANCHO_BOTON
-            && y >= posicionY && y <= posicionY + altura;
-    }
+        // Dibujar los botones con la animacion de "crecer" cuando hay hover.
+        for (int i = 0; i < 3; i++) {
+            // Mover la escala un 20% del camino hacia su objetivo, cada frame: queda suave.
+            float objetivo = hover[i] ? ESCALA_HOVER : 1f;
+            escalas[i] = escalas[i] + (objetivo - escalas[i]) * 0.2f;
 
-    // Suavizar el aumento de tamaño al pasar el cursor.
-    private float actualizarEscala(float actual, boolean estaEnHover) {
-        float objetivo = estaEnHover ? ESCALA_HOVER : 1f;
-        return actual + (objetivo - actual) * 0.2f;
-    }
+            float ancho = ANCHO_BOTON * escalas[i];
+            float alto = alturas[i] * escalas[i];
+            float x = (ANCHO - ancho) / 2f;
+            float y = posicionesY[i] - (alto - alturas[i]) / 2f; // crecer hacia los costados
+            game.batch.draw(botones[i], x, y, ancho, alto);
+        }
+        game.batch.end();
 
-    // Dibujar un boton centrado.
-    private void dibujarBoton(int indice, float y, float altura) {
-        if (botones[indice] == null) return;
-
-        float escala = escalas[indice];
-        float ancho = ANCHO_BOTON * escala;
-        float alto = altura * escala;
-        float x = (ANCHO - ancho) / 2f;
-        float dibujarY = y - (alto - altura) / 2f;
-        game.batch.draw(botones[indice], x, dibujarY, ancho, alto);
-    }
-
-    // Activar la opcion presionada.
-    private void procesarClick() {
-        boolean presionado = Gdx.input.isTouched()
-            || Gdx.input.isButtonPressed(Input.Buttons.LEFT);
-        boolean clickNuevo = presionado && !mousePresionado;
+        // Revisar si hicieron click en algun boton.
+        boolean presionado = Gdx.input.isTouched() || Gdx.input.isButtonPressed(Input.Buttons.LEFT);
+        boolean clickNuevo = presionado && !mousePresionado; // "recien" presionado
 
         if (clickNuevo) {
-            if (hover[0]) abrirPantalla(new JuegoScreen(game));
-            else if (hover[1]) abrirPantalla(new ControlesScreen(game));
-            else if (hover[2]) {
-                if (sonidoClick != null) sonidoClick.play(0.8f);
+            if (hover[0]) {
+                abrirPantalla(new JuegoScreen(game));
+            } else if (hover[1]) {
+                abrirPantalla(new ControlesScreen(game));
+            } else if (hover[2]) {
+                sonidoClick.play(0.8f);
                 Gdx.app.exit();
-                return;
             }
         }
         mousePresionado = presionado;
     }
 
-    // Reproducir click, detener musica y cambiar de pantalla.
+    // Reproducir click, cortar la musica y cambiar de pantalla.
     private void abrirPantalla(Screen pantalla) {
-        if (sonidoClick != null) sonidoClick.play(0.8f);
-        if (musica != null) musica.stop();
+        sonidoClick.play(0.8f);
+        if (musica != null) {
+            musica.stop();
+        }
         game.setScreen(pantalla);
     }
 
+    // LibGDX invoca este metodo al cambiar el tamano de la ventana.
     @Override
     public void resize(int width, int height) {
-        // Adaptar el viewport al nuevo tamaño.
-        if (viewport != null) viewport.update(width, height, true);
+        // Adaptar el viewport al nuevo tamano de la ventana.
+        if (viewport != null) {
+            viewport.update(width, height, true);
+        }
     }
 
+    // El menu no necesita acciones adicionales al pausar o reanudar.
     @Override
     public void pause() {
-        // No hay una accion especial al pausar.
     }
 
+    // Al volver a primer plano, el siguiente render continua dibujando el menu.
     @Override
     public void resume() {
-        // No hay una accion especial al reanudar.
     }
 
+    // La musica del menu se detiene cuando se muestra otra pantalla.
     @Override
     public void hide() {
         // Detener la musica al salir del menu.
-        if (musica != null) musica.stop();
+        if (musica != null) {
+            musica.stop();
+        }
     }
 
+    // Libera imagenes, musica y sonido creados por el menu.
     @Override
     public void dispose() {
         // Liberar fondos, botones y sonidos.
-        if (fondos != null) for (Texture textura : fondos) textura.dispose();
-        for (Texture boton : botones) if (boton != null) boton.dispose();
-        if (musica != null) musica.dispose();
-        if (sonidoHover != null) sonidoHover.dispose();
-        if (sonidoClick != null) sonidoClick.dispose();
+        if (fondos != null) {
+            for (Texture textura : fondos) {
+                textura.dispose();
+            }
+        }
+        for (Texture boton : botones) {
+            if (boton != null) {
+                boton.dispose();
+            }
+        }
+        if (musica != null) {
+            musica.dispose();
+        }
+        if (sonidoClick != null) {
+            sonidoClick.dispose();
+        }
     }
 }
