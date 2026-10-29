@@ -19,6 +19,8 @@ import com.badlogic.gdx.math.Rectangle;
 public class Jugador {
 
     // --- Animaciones (una por cada accion y direccion) ---
+    private Animation<TextureRegion> estaticoDerecha;
+    private Animation<TextureRegion> estaticoIzquierda;
     private Animation<TextureRegion> caminarDerecha;
     private Animation<TextureRegion> caminarIzquierda;
     private Animation<TextureRegion> saltoDerecha;
@@ -26,6 +28,30 @@ public class Jugador {
     private Animation<TextureRegion> ataqueDerecha;
     private Animation<TextureRegion> ataqueIzquierda;
     private Animation<TextureRegion> escudo;
+
+    private static final String RUTA_ESTATICO_NORMAL_DERECHA =
+        "jugador/Pj principal estatico derecha-20261029T164911Z-1-001/Pj principal estatico derecha";
+    private static final String RUTA_ESTATICO_NORMAL_IZQUIERDA =
+        "jugador/Pj principal estatico izquierda-20261029T164915Z-1-001/Pj principal estatico izquierda";
+    private static final String RUTA_ESTATICO_LANZA_DERECHA =
+        "jugador/Jorge estatico lanza derecha-20261029T164927Z-1-001/Jorge estatico lanza derecha";
+    private static final String RUTA_ESTATICO_LANZA_IZQUIERDA =
+        "jugador/Jorge estatico lanza izquierda-20261029T164925Z-1-001/Jorge estatico lanza izquierda";
+    private static final String RUTA_CAMINAR_LANZA_IZQUIERDA =
+        "jugador/Jorge caminar lanza izquierda-20261029T164930Z-1-001/Jorge caminar lanza izquierda";
+    private static final String RUTA_CAMINAR_LANZA_DERECHA =
+        "jugador/caminar_derecha";
+    private static final String RUTA_SALTO_LANZA_DERECHA =
+        "jugador/Jorge salto lanza derecha-20261029T164924Z-1-001/Jorge salto lanza derecha";
+    private static final String RUTA_SALTO_LANZA_IZQUIERDA =
+        "jugador/Jorge salto lanza izquierda-20261029T164922Z-1-001/Jorge salto lanza izquierda";
+    private static final String RUTA_ATAQUE_LANZA_DERECHA =
+        "jugador/Jorge ataque lanza derecha-20261029T164934Z-1-001/Jorge ataque lanza derecha";
+    private static final String RUTA_ATAQUE_LANZA_IZQUIERDA =
+        "jugador/Jorge ataque lanza izquierda-20261029T164932Z-1-001/Jorge ataque lanza izquierda";
+
+    private static boolean lanzaComprada = false;
+    private boolean tieneLanza;
 
     // Lista con todas las imagenes cargadas, para liberarlas al cerrar la pantalla.
     private final ArrayList<Texture> imagenes = new ArrayList<>();
@@ -98,6 +124,7 @@ public class Jugador {
     public Jugador(float posicionInicialX, float posicionInicialY) {
         x = posicionInicialX;
         y = posicionInicialY;
+        tieneLanza = lanzaComprada;
 
         // Cargar las imagenes de todas las animaciones y los sonidos.
         cargarTodasLasAnimaciones();
@@ -105,6 +132,28 @@ public class Jugador {
         sonidoAtaque = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_ataque.mp3"));
         sonidoEscudo = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_escudo.mp3"));
         sonidoCaminar = Gdx.audio.newSound(Gdx.files.internal("sonidos/sonido_caminar.mp3"));
+    }
+
+    public static void comprarLanza() {
+        lanzaComprada = true;
+    }
+
+    public static boolean tieneLanzaComprada() {
+        return lanzaComprada;
+    }
+
+    public static void resetLanza() {
+        lanzaComprada = false;
+    }
+
+    public void setLanzaComprada(boolean comprada) {
+        tieneLanza = comprada;
+        lanzaComprada = comprada;
+        cargarTodasLasAnimaciones();
+    }
+
+    public boolean tieneLanza() {
+        return tieneLanza;
     }
 
     // Este metodo se llama una vez por frame desde la pantalla que corresponda.
@@ -479,11 +528,10 @@ public class Jugador {
             return caminarIzquierda.getKeyFrame(tiempoAnimacion, true);
         }
 
-        // Quieto: mostrar el primer frame de caminar.
         if (miraDerecha) {
-            return caminarDerecha.getKeyFrame(0f);
+            return estaticoDerecha.getKeyFrame(tiempoAnimacion, true);
         }
-        return caminarIzquierda.getKeyFrame(0f);
+        return estaticoIzquierda.getKeyFrame(tiempoAnimacion, true);
     }
 
     // Caja del cuerpo: lo que pueden tocar los golpes enemigos.
@@ -508,12 +556,15 @@ public class Jugador {
 
     // Cargar las animaciones de Jorge (carpeta, cantidad de imagenes, duracion de cada una).
     private void cargarTodasLasAnimaciones() {
-        caminarDerecha = cargarAnimacion("caminar_derecha", 10, 0.08f);
-        caminarIzquierda = cargarAnimacion("caminar_izquierda", 10, 0.08f);
-        saltoDerecha = cargarAnimacion("salto_derecha", 13, 0.10f);
-        saltoIzquierda = cargarAnimacion("salto_izquierda", 13, 0.10f);
-        ataqueDerecha = cargarAnimacion("ataque_derecha", 12, 0.07f);
-        ataqueIzquierda = cargarAnimacion("ataque_izquierda", 12, 0.07f);
+        boolean conLanza = lanzaComprada || tieneLanza;
+        estaticoDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_ESTATICO_LANZA_DERECHA : RUTA_ESTATICO_NORMAL_DERECHA, 12, 0.10f);
+        estaticoIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_ESTATICO_LANZA_IZQUIERDA : RUTA_ESTATICO_NORMAL_IZQUIERDA, 12, 0.10f);
+        caminarDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_CAMINAR_LANZA_DERECHA : "jugador/caminar_derecha", 10, 0.08f);
+        caminarIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_CAMINAR_LANZA_IZQUIERDA : "jugador/caminar_izquierda", 10, 0.08f);
+        saltoDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_SALTO_LANZA_DERECHA : "jugador/salto_derecha", 13, 0.10f);
+        saltoIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_SALTO_LANZA_IZQUIERDA : "jugador/salto_izquierda", 13, 0.10f);
+        ataqueDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_ATAQUE_LANZA_DERECHA : "jugador/ataque_derecha", conLanza ? 10 : 12, conLanza ? 0.08f : 0.07f);
+        ataqueIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_ATAQUE_LANZA_IZQUIERDA : "jugador/ataque_izquierda", conLanza ? 10 : 12, conLanza ? 0.08f : 0.07f);
         escudo = cargarAnimacion("escudo", 8, 0.12f);
     }
 
@@ -522,11 +573,17 @@ public class Jugador {
     private Animation<TextureRegion> cargarAnimacion(String nombreDeCarpeta,
                                                      int cantidadDeImagenes,
                                                      float duracionDeCadaImagen) {
+        return cargarAnimacionDesdeRuta(String.format("jugador/%s", nombreDeCarpeta),
+            cantidadDeImagenes, duracionDeCadaImagen);
+    }
+
+    private Animation<TextureRegion> cargarAnimacionDesdeRuta(String rutaBase,
+                                                            int cantidadDeImagenes,
+                                                            float duracionDeCadaImagen) {
         TextureRegion[] frames = new TextureRegion[cantidadDeImagenes];
 
         for (int numero = 0; numero < cantidadDeImagenes; numero++) {
-            String nombreDelArchivo = String.format("jugador/%s/%02d.png",
-                nombreDeCarpeta, numero + 1);
+            String nombreDelArchivo = String.format("%s/%02d.png", rutaBase, numero + 1);
 
             Texture imagen = new Texture(Gdx.files.internal(nombreDelArchivo));
             imagenes.add(imagen);

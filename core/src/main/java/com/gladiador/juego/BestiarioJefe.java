@@ -11,19 +11,19 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 
-// El jefe "El Bestiario" del Coliseo.
-// Alterna dos ataques: el latigazo y la invocacion de un leon.
+// El jefe del Coliseo. En la Zona 1 usa el Bestiario; en la Zona 2 usa la version
+// con un ataque de cadena y una onda expansiva.
 public class BestiarioJefe {
 
     private static final int CANTIDAD_FRAMES_LATIGO = 12;   // frames de la animacion de ataque
     private static final int CANTIDAD_FRAMES_ESTAITCO = 13; // frames de la animacion quieto
     private static final int VIDA_MAXIMA = 16;
+    private static final int VIDA_MAXIMA_ZONA_2 = 20;
     private static final float DURACION_FRAME_ESTAITCO = 0.10f;
-    // El ataque dura lo mismo que antes (para no cambiar la jugabilidad), pero ahora
-    // se reparte entre 12 imagenes en vez de 25.
     private static final float DURACION_ANIMACION_LATIGO = 1.75f;
     private static final float DURACION_FRAME_LATIGO = DURACION_ANIMACION_LATIGO / CANTIDAD_FRAMES_LATIGO;
     private static final float DURACION_INVOCACION = 1.4f;
+    private static final float DURACION_ONDA_ESCAPE = 1.15f;
     private static final float MOMENTO_IMPACTO_LATIGO = 0.78f;
     private static final float ESPERA_ENTRE_ATAQUES_MINIMA = 2.2f;
     private static final float ESPERA_ENTRE_ATAQUES_MAXIMA = 3.4f;
@@ -32,68 +32,85 @@ public class BestiarioJefe {
     private static final float ALTURA_PISO = 72f;
     private static final float ALTURA_MANO_LATIGO = ALTURA_PISO + 68f;
     private static final float DISTANCIA_MANO_CENTRO = 50f;
-    private static final float ALTURA_VISUAL_JEFE = 300f;  // alto del jefe en pantalla
-    private static final float FRACCION_BANDA_PIES = 0.18f; // parte de abajo usada para "apoyar" los pies
+    private static final float ALTURA_VISUAL_JEFE = 300f;
+    private static final float FRACCION_BANDA_PIES = 0.18f;
 
     public enum Ataque {
-        // El jefe esta esperando el proximo ataque.
         NINGUNO,
-        // Ataque cercano con el latigo.
         LATIGO,
-        // Ataque a distancia que crea un leon.
-        LEON
+        LEON,
+        CADENA,
+        ONDA_ESCAPE
     }
 
-    // Medidas de un conjunto de imagenes: donde apoyar los pies y donde centrar el cuerpo.
     private static class Medida {
-        float centroPiesX;  // centro horizontal de los pies (en pixeles de la imagen)
-        float filaPiesY;    // fila mas baja con dibujo (en pixeles de la imagen)
-        float altoVisible;  // alto del dibujo (en pixeles de la imagen)
-        float canvas;       // tamano del lado de la imagen (256 o 512)
+        float centroPiesX;
+        float filaPiesY;
+        float altoVisible;
+        float canvas;
     }
 
+    private final boolean jefeZona2;
     private final Animation<TextureRegion> estaticoDerecha;
     private final Animation<TextureRegion> estaticoIzquierda;
     private final Animation<TextureRegion> ataqueDerecha;
     private final Animation<TextureRegion> ataqueIzquierda;
+    private final Animation<TextureRegion> ondaDerecha;
+    private final Animation<TextureRegion> ondaIzquierda;
     private final Medida medidaEstatico;
     private final Medida medidaAtaque;
-    private final float escalaVisual;   // pixeles de imagen -> pixeles de pantalla
+    private final Medida medidaOnda;
+    private final float escalaVisual;
     private final ArrayList<Texture> texturas = new ArrayList<>();
 
-    private int vida = VIDA_MAXIMA;
+    private int vida;
     private float tiempoAtaque;
-    private float tiempoQuieto;         // reloj propio de la animacion "quieto"
+    private float tiempoQuieto;
     private float tiempoHastaAtaque = 1.8f;
     private float tiempoDanio;
     private long ultimoAtaqueRecibido = -1L;
     private boolean impactoLatigoResuelto;
     private boolean leonInvocado;
     private boolean proximoAtaqueEsLatigo = true;
+    private boolean proximoAtaqueEsCadena = true;
     private Ataque ataqueActual = Ataque.NINGUNO;
 
     private boolean impactoLatigoPendiente;
     private boolean invocacionPendiente;
+    private boolean ondaEscapePendiente;
 
     public BestiarioJefe() {
-        // El jefe mira hacia los dos lados: cargamos las cuatro animaciones.
-        estaticoDerecha = cargarAnimacion("jefe1/estatico_derecha", CANTIDAD_FRAMES_ESTAITCO,
-            DURACION_FRAME_ESTAITCO);
-        estaticoIzquierda = cargarAnimacion("jefe1/estatico_izquierda", CANTIDAD_FRAMES_ESTAITCO,
-            DURACION_FRAME_ESTAITCO);
-        ataqueDerecha = cargarAnimacion("jefe1/ataque_derecha", CANTIDAD_FRAMES_LATIGO,
-            DURACION_FRAME_LATIGO);
-        ataqueIzquierda = cargarAnimacion("jefe1/ataque_izquierda", CANTIDAD_FRAMES_LATIGO,
-            DURACION_FRAME_LATIGO);
+        this(false);
+    }
 
-        medidaEstatico = medirConjunto("jefe1/estatico_derecha", CANTIDAD_FRAMES_ESTAITCO, 256f);
-        medidaAtaque = medirConjunto("jefe1/ataque_derecha", CANTIDAD_FRAMES_LATIGO, 512f);
-        // Usamos la misma escala para las dos animaciones: asi el jefe no cambia
-        // de tamano entre estar quieto y atacar.
+    public BestiarioJefe(boolean jefeZona2) {
+        this.jefeZona2 = jefeZona2;
+        if (jefeZona2) {
+            vida = VIDA_MAXIMA_ZONA_2;
+            estaticoDerecha = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 derecha", 15, 0.08f);
+            estaticoIzquierda = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 izquierda", 15, 0.08f);
+            ataqueDerecha = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 derecha", 15, 0.08f);
+            ataqueIzquierda = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 izquierda", 15, 0.08f);
+            ondaDerecha = cargarAnimacion("Jefe zona 2/Ataque onda expansiva jefe zona 2 derecha", 14, 0.09f);
+            ondaIzquierda = cargarAnimacion("Jefe zona 2/Ataque onda expansiva jefe zona 2 izquierda", 14, 0.09f);
+            medidaEstatico = medirConjunto("Jefe zona 2/Ataque normal jefe zona 2 derecha", 15, 512f);
+            medidaAtaque = medirConjunto("Jefe zona 2/Ataque normal jefe zona 2 derecha", 15, 512f);
+            medidaOnda = medirConjunto("Jefe zona 2/Ataque onda expansiva jefe zona 2 derecha", 14, 512f);
+        } else {
+            vida = VIDA_MAXIMA;
+            estaticoDerecha = cargarAnimacion("jefe1/estatico_derecha", CANTIDAD_FRAMES_ESTAITCO, DURACION_FRAME_ESTAITCO);
+            estaticoIzquierda = cargarAnimacion("jefe1/estatico_izquierda", CANTIDAD_FRAMES_ESTAITCO, DURACION_FRAME_ESTAITCO);
+            ataqueDerecha = cargarAnimacion("jefe1/ataque_derecha", CANTIDAD_FRAMES_LATIGO, DURACION_FRAME_LATIGO);
+            ataqueIzquierda = cargarAnimacion("jefe1/ataque_izquierda", CANTIDAD_FRAMES_LATIGO, DURACION_FRAME_LATIGO);
+            ondaDerecha = null;
+            ondaIzquierda = null;
+            medidaEstatico = medirConjunto("jefe1/estatico_derecha", CANTIDAD_FRAMES_ESTAITCO, 256f);
+            medidaAtaque = medirConjunto("jefe1/ataque_derecha", CANTIDAD_FRAMES_LATIGO, 512f);
+            medidaOnda = medidaAtaque;
+        }
         escalaVisual = ALTURA_VISUAL_JEFE / medidaEstatico.altoVisible;
     }
 
-    // Actualiza temporizadores, decide cuando atacar y genera eventos de impacto.
     public void actualizar(float delta) {
         tiempoQuieto += delta;
         if (tiempoDanio > 0f) {
@@ -109,6 +126,26 @@ public class BestiarioJefe {
         }
 
         tiempoAtaque += delta;
+        if (jefeZona2) {
+            if (ataqueActual == Ataque.CADENA) {
+                if (!impactoLatigoResuelto && tiempoAtaque >= MOMENTO_IMPACTO_LATIGO) {
+                    impactoLatigoResuelto = true;
+                    impactoLatigoPendiente = true;
+                }
+                if (tiempoAtaque >= DURACION_ANIMACION_LATIGO) {
+                    finalizarAtaque();
+                }
+            } else if (ataqueActual == Ataque.ONDA_ESCAPE) {
+                if (!ondaEscapePendiente && tiempoAtaque >= 0.48f) {
+                    ondaEscapePendiente = true;
+                }
+                if (tiempoAtaque >= DURACION_ONDA_ESCAPE) {
+                    finalizarAtaque();
+                }
+            }
+            return;
+        }
+
         if (ataqueActual == Ataque.LATIGO) {
             if (!impactoLatigoResuelto && tiempoAtaque >= MOMENTO_IMPACTO_LATIGO) {
                 impactoLatigoResuelto = true;
@@ -128,18 +165,24 @@ public class BestiarioJefe {
         }
     }
 
-    // Empieza el siguiente ataque de la secuencia alternada.
     private void iniciarSiguienteAtaque() {
-        ataqueActual = proximoAtaqueEsLatigo ? Ataque.LATIGO : Ataque.LEON;
-        proximoAtaqueEsLatigo = !proximoAtaqueEsLatigo;
+        if (jefeZona2) {
+            ataqueActual = proximoAtaqueEsCadena ? Ataque.CADENA : Ataque.ONDA_ESCAPE;
+            proximoAtaqueEsCadena = !proximoAtaqueEsCadena;
+        } else {
+            ataqueActual = proximoAtaqueEsLatigo ? Ataque.LATIGO : Ataque.LEON;
+            proximoAtaqueEsLatigo = !proximoAtaqueEsLatigo;
+        }
         tiempoAtaque = 0f;
         impactoLatigoResuelto = false;
         leonInvocado = false;
     }
 
-    // Vuelve al estado de espera y sortea cuanto tarda el siguiente ataque.
     private void finalizarAtaque() {
         ataqueActual = Ataque.NINGUNO;
+        impactoLatigoPendiente = false;
+        invocacionPendiente = false;
+        ondaEscapePendiente = false;
         tiempoHastaAtaque = MathUtils.random(ESPERA_ENTRE_ATAQUES_MINIMA, ESPERA_ENTRE_ATAQUES_MAXIMA);
     }
 
@@ -151,6 +194,10 @@ public class BestiarioJefe {
         return true;
     }
 
+    public boolean consumirImpactoCadena() {
+        return consumirImpactoLatigo();
+    }
+
     public boolean consumirInvocacionLeon() {
         if (!invocacionPendiente) {
             return false;
@@ -159,7 +206,14 @@ public class BestiarioJefe {
         return true;
     }
 
-    // Aplica como maximo un dano por tajo del jugador y activa el destello visual.
+    public boolean consumirImpactoOndaEscape() {
+        if (!ondaEscapePendiente) {
+            return false;
+        }
+        ondaEscapePendiente = false;
+        return true;
+    }
+
     public boolean recibirGolpe(long numeroAtaque) {
         if (!estaVivo() || numeroAtaque == ultimoAtaqueRecibido) {
             return false;
@@ -170,19 +224,18 @@ public class BestiarioJefe {
         return true;
     }
 
-    // Cancela el ataque actual, por ejemplo cuando Jorge consigue un parry.
     public void aturdir() {
         if (!estaVivo()) {
             return;
         }
         impactoLatigoPendiente = false;
         invocacionPendiente = false;
+        ondaEscapePendiente = false;
         ataqueActual = Ataque.NINGUNO;
         tiempoAtaque = 0f;
         tiempoHastaAtaque = 1f;
     }
 
-    // Devuelve el rectangulo de colision del cuerpo del jefe.
     public Rectangle getHitbox() {
         float mitadAnchoVisible = TAMANO_LIENZO * 0.98f * 0.15f;
         return new Rectangle(
@@ -193,14 +246,28 @@ public class BestiarioJefe {
         );
     }
 
-    // Zona que cubre el latigazo: va desde la mano del jefe hasta donde esta Jorge.
     public Rectangle getAreaLatigo(float jugadorX, float jugadorY) {
-        float origenX = getOrigenLatigoX(jugadorX);
+        return getAreaAtaqueGeneral(jugadorX, jugadorY, 24f, 84f);
+    }
+
+    public Rectangle getAreaCadena(float jugadorX, float jugadorY) {
+        return getAreaLatigo(jugadorX, jugadorY);
+    }
+
+    public Rectangle getAreaOndaEscape(float jugadorX, float jugadorY) {
+        float origenX = POSICION_CENTRO_X;
+        float xMinimo = Math.min(origenX, jugadorX) - 38f;
+        float ancho = Math.max(120f, Math.abs(jugadorX - origenX) + 140f);
+        return new Rectangle(xMinimo, ALTURA_PISO + 20f, ancho, 150f);
+    }
+
+    private Rectangle getAreaAtaqueGeneral(float jugadorX, float jugadorY, float margenX, float margenY) {
+        float origenX = POSICION_CENTRO_X + Math.signum(jugadorX - POSICION_CENTRO_X) * DISTANCIA_MANO_CENTRO;
         float objetivoY = jugadorY + 65f;
-        float xMinimo = Math.min(origenX, jugadorX) - 12f;
+        float xMinimo = Math.min(origenX, jugadorX) - margenX;
         float yMinimo = Math.min(ALTURA_MANO_LATIGO, objetivoY) - 42f;
         float ancho = Math.max(24f, Math.abs(jugadorX - origenX) + 24f);
-        float alto = Math.max(60f, Math.abs(objetivoY - ALTURA_MANO_LATIGO) + 84f);
+        float alto = Math.max(60f, Math.abs(objetivoY - ALTURA_MANO_LATIGO) + margenY);
         return new Rectangle(xMinimo, yMinimo, ancho, alto);
     }
 
@@ -208,17 +275,12 @@ public class BestiarioJefe {
         return POSICION_CENTRO_X;
     }
 
-    private float getOrigenLatigoX(float jugadorX) {
-        return POSICION_CENTRO_X
-            + Math.signum(jugadorX - POSICION_CENTRO_X) * DISTANCIA_MANO_CENTRO;
-    }
-
     public int getVida() {
         return vida;
     }
 
     public int getVidaMaxima() {
-        return VIDA_MAXIMA;
+        return jefeZona2 ? VIDA_MAXIMA_ZONA_2 : VIDA_MAXIMA;
     }
 
     public boolean estaVivo() {
@@ -229,13 +291,17 @@ public class BestiarioJefe {
         return ataqueActual;
     }
 
-    // Dibujar al jefe mirando hacia el lado donde esta Jorge.
-    // Elige la animacion segun direccion y estado y la dibuja alineada al piso.
     public void dibujar(SpriteBatch batch, float jugadorX) {
         boolean miraDerecha = jugadorX >= POSICION_CENTRO_X;
         TextureRegion frame;
         Medida medida;
-        if (ataqueActual == Ataque.LATIGO) {
+
+        if (ataqueActual == Ataque.ONDA_ESCAPE) {
+            frame = miraDerecha
+                ? ondaDerecha.getKeyFrame(tiempoAtaque, false)
+                : ondaIzquierda.getKeyFrame(tiempoAtaque, false);
+            medida = medidaOnda;
+        } else if (ataqueActual == Ataque.CADENA || ataqueActual == Ataque.LATIGO || ataqueActual == Ataque.LEON) {
             frame = miraDerecha
                 ? ataqueDerecha.getKeyFrame(tiempoAtaque, false)
                 : ataqueIzquierda.getKeyFrame(tiempoAtaque, false);
@@ -247,21 +313,18 @@ public class BestiarioJefe {
             medida = medidaEstatico;
         }
 
-        // Apoyamos los pies en el piso y centramos el cuerpo en la misma posicion
-        // para las dos animaciones, asi el jefe no "salta" ni se corre al atacar.
         float tamano = medida.canvas * escalaVisual;
         float x = POSICION_CENTRO_X - medida.centroPiesX * escalaVisual;
         float y = ALTURA_PISO - (medida.canvas - 1f - medida.filaPiesY) * escalaVisual;
 
         batch.setColor(1f, 1f, 1f, 1f);
         if (tiempoDanio > 0f && ((int) (tiempoDanio * 40f) % 2) == 0) {
-            batch.setColor(1f, 0.5f, 0.5f, 1f); // parpadeo rojo al recibir un golpe
+            batch.setColor(1f, 0.5f, 0.5f, 1f);
         }
         batch.draw(frame, x, y, tamano, tamano);
         batch.setColor(1f, 1f, 1f, 1f);
     }
 
-    // Cargar una animacion: los archivos son 01.png, 02.png... dentro de una carpeta.
     private Animation<TextureRegion> cargarAnimacion(String ruta, int cantidad, float duracionFrame) {
         TextureRegion[] frames = new TextureRegion[cantidad];
         for (int indice = 0; indice < cantidad; indice++) {
@@ -273,9 +336,6 @@ public class BestiarioJefe {
         return new Animation<>(duracionFrame, frames);
     }
 
-    // Recorrer todas las imagenes del conjunto para saber donde estan los pies y
-    // cuanto mide el dibujo. Miramos la franja de abajo (los pies) para centrar el
-    // cuerpo: el latigo se estira hacia un costado y no debe mover al jefe.
     private Medida medirConjunto(String ruta, int cantidad, float canvas) {
         int minX = Integer.MAX_VALUE;
         int minY = Integer.MAX_VALUE;
@@ -297,7 +357,6 @@ public class BestiarioJefe {
             pixmap.dispose();
         }
 
-        // Segunda pasada: centro horizontal de los pixeles de la franja de los pies.
         int banda = Math.max(1, Math.round((maxY - minY + 1) * FRACCION_BANDA_PIES));
         int piesMinX = Integer.MAX_VALUE;
         int piesMaxX = -1;
@@ -322,7 +381,6 @@ public class BestiarioJefe {
         return medida;
     }
 
-    // Libera todas las texturas usadas por las animaciones del jefe.
     public void dispose() {
         for (Texture textura : texturas) {
             textura.dispose();

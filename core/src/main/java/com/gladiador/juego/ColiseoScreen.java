@@ -27,6 +27,7 @@ public class ColiseoScreen implements Screen {
     private static final float DURACION_CARTEL_JEFE = 2.5f;    // cuanto se ve el cartel del jefe
 
     private final MainClass game;
+    private final boolean jefeZona2;
     private final ArrayList<LeonInvocado> leones = new ArrayList<>(); // leones invocados en pista
 
     private OrthographicCamera camera;
@@ -49,14 +50,16 @@ public class ColiseoScreen implements Screen {
     private boolean victoria;
 
     // Recibe el controlador principal para volver al lobby o registrar la victoria.
-    public ColiseoScreen(MainClass game) {
+    public ColiseoScreen(MainClass game, boolean jefeZona2) {
         this.game = game;
+        this.jefeZona2 = jefeZona2;
     }
 
     // Cargar todo al abrir la pantalla.
     // Prepara escenario, personaje, jefe e interfaz al entrar al combate.
     @Override
     public void show() {
+        Vida.restablecer();
         camera = new OrthographicCamera();
         viewport = new FitViewport(JuegoScreen.ANCHO, JuegoScreen.ALTO, camera);
         viewport.apply(true);
@@ -70,7 +73,7 @@ public class ColiseoScreen implements Screen {
         jugador = new Jugador(POSICION_INICIAL_JUGADOR, PISO);
         jugador.setEscalaVisual(1.2f); // en el Coliseo se lo ve un poco mas grande
         vida = new Vida();
-        jefe = new BestiarioJefe();
+        jefe = new BestiarioJefe(jefeZona2);
         shapeRenderer = new ShapeRenderer();
         tiempoCartelJefe = DURACION_CARTEL_JEFE;
     }
@@ -95,8 +98,8 @@ public class ColiseoScreen implements Screen {
             actualizarCombate(delta);
         }
         if (victoria) {
-            // Ganar el jefe de Zona 1 desbloquea Zona 2.
-            game.registrarEtapaCompletada(MainClass.ETAPA_JEFE_ZONA1);
+            int etapaGanada = jefeZona2 ? MainClass.ETAPA_JEFE_ZONA2 : MainClass.ETAPA_JEFE_ZONA1;
+            game.registrarEtapaCompletada(etapaGanada);
             vida.curarCompleto();
             game.setScreen(new JuegoScreen(game));
             return;
@@ -171,9 +174,18 @@ public class ColiseoScreen implements Screen {
             }
         }
 
-        // El latigazo del jefe: revisar si agarro a Jorge.
+        // Los ataques del jefe: cadena (latigo) y onda expansiva. En la Zona 2 el
+        // enemigo usa dos tipos distintos de golpe de area.
         if (jefe.consumirImpactoLatigo()
             && jefe.getAreaLatigo(jugador.getCentroX(), jugador.getY()).overlaps(jugador.getHitbox())) {
+            resolverAtaqueDelJefe(jefe.getCentroX());
+        }
+        if (jefeZona2 && jefe.consumirImpactoCadena()
+            && jefe.getAreaCadena(jugador.getCentroX(), jugador.getY()).overlaps(jugador.getHitbox())) {
+            resolverAtaqueDelJefe(jefe.getCentroX());
+        }
+        if (jefeZona2 && jefe.consumirImpactoOndaEscape()
+            && jefe.getAreaOndaEscape(jugador.getCentroX(), jugador.getY()).overlaps(jugador.getHitbox())) {
             resolverAtaqueDelJefe(jefe.getCentroX());
         }
 
@@ -283,8 +295,8 @@ public class ColiseoScreen implements Screen {
 
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             if (reintentarSeleccionado) {
-                Vida.restablecer();
-                game.setScreen(new ColiseoScreen(game)); // pelear de nuevo
+                game.resetProgreso();
+                game.setScreen(new JuegoScreen(game)); // reinicia la campaña y restaura la vida
             } else if (volverSeleccionado) {
                 game.setScreen(new JuegoScreen(game)); // volver al lobby
             }

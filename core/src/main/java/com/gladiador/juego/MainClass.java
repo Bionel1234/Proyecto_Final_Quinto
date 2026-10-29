@@ -15,6 +15,7 @@ public class MainClass extends Game {
     public static final int ETAPA_ZONA1_NIVEL2 = 1;
     public static final int ETAPA_JEFE_ZONA1 = 2;
     public static final int ETAPA_ZONA2 = 3;
+    public static final int ETAPA_JEFE_ZONA2 = 4;
 
     // Indice de la etapa mas avanzada disponible en el selector.
     private int etapaDesbloqueada = ETAPA_ZONA1_NIVEL1;
@@ -42,8 +43,16 @@ public class MainClass extends Game {
 
     // Completar la etapa actual avanza el progreso y retira las anteriores del selector.
     public void registrarEtapaCompletada(int etapaCompletada) {
-        if (etapaCompletada == etapaDesbloqueada && etapaDesbloqueada <= ETAPA_ZONA2) {
+        if (etapaCompletada == etapaDesbloqueada && etapaDesbloqueada <= ETAPA_JEFE_ZONA2) {
             etapaDesbloqueada++;
         }
+    }
+
+    // Reinicia toda la campaña para que el retry empiece desde cero.
+    public void resetProgreso() {
+        etapaDesbloqueada = ETAPA_ZONA1_NIVEL1;
+        Monedas.reiniciar();
+        Vida.restablecer();
+        Jugador.resetLanza();
     }
 }

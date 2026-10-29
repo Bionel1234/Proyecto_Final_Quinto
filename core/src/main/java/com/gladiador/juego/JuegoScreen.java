@@ -54,6 +54,7 @@ public class JuegoScreen implements Screen {
     // show() se llama al abrir la pantalla: aca se carga TODO.
     @Override
     public void show() {
+        Vida.restablecer();
         configurarCamara();
         cargarMazmorra();
         panelSelector = new Texture(Gdx.files.internal("menu/controles_fondo.png"));
@@ -141,14 +142,19 @@ public class JuegoScreen implements Screen {
         if (hablandoConComerciante) {
             fuente.draw(game.batch, "Mercader: Puedo curarte por 50 monedas.", 430f, 650f);
             fuente.draw(game.batch, "Pulsa R para curarte por completo.", 430f, 620f);
-            fuente.draw(game.batch, mensajeComerciante, 430f, 590f);
-            fuente.draw(game.batch, "Pulsa F para cerrar el diálogo", 430f, 560f);
+            if (!Jugador.tieneLanzaComprada()) {
+                fuente.draw(game.batch, "Pulsa L para comprar la lanza por 1 moneda.", 430f, 600f);
+            } else {
+                fuente.draw(game.batch, "Lanza comprada: equipada automáticamente.", 430f, 600f);
+            }
+            fuente.draw(game.batch, mensajeComerciante, 430f, 570f);
+            fuente.draw(game.batch, "Pulsa F para cerrar el diálogo", 430f, 540f);
         }
 
         // 5) Si esta frente a la puerta, mostrar el selector de zona.
         if (puedeEntrarAlMapa) {
             dibujarSelectorMapa();
-            if (game.getEtapaDesbloqueada() <= MainClass.ETAPA_ZONA2
+            if (game.getEtapaDesbloqueada() <= MainClass.ETAPA_JEFE_ZONA2
                     && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
                 entrarEnMapaSeleccionado();
                 game.batch.end();
@@ -174,6 +180,20 @@ public class JuegoScreen implements Screen {
                 mensajeComerciante = "No tienes suficientes monedas.";
             }
         }
+        if (cercaDelComerciante && hablandoConComerciante
+                && Gdx.input.isKeyJustPressed(Input.Keys.L)) {
+            if (Jugador.tieneLanzaComprada()) {
+                mensajeComerciante = "Ya tienes la lanza equipada.";
+            } else if (Monedas.gastar(1)) {
+                Jugador.comprarLanza();
+                if (jugador != null) {
+                    jugador.setLanzaComprada(true);
+                }
+                mensajeComerciante = "Has comprado la lanza. Se equipó automáticamente.";
+            } else {
+                mensajeComerciante = "Necesitas 1 moneda para comprar la lanza.";
+            }
+        }
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             game.setScreen(new MenuScreen(game));
         }
@@ -196,7 +216,7 @@ public class JuegoScreen implements Screen {
         game.batch.draw(panelSelector, panelX, panelY, panelAncho, panelAlto);
         game.batch.setColor(1f, 1f, 1f, 1f);
 
-        if (game.getEtapaDesbloqueada() > MainClass.ETAPA_ZONA2) {
+        if (game.getEtapaDesbloqueada() > MainClass.ETAPA_JEFE_ZONA2) {
             fuente.draw(game.batch, "¡Campaña completada!", panelX + 40f, panelY + 150f);
             return;
         }
@@ -219,7 +239,10 @@ public class JuegoScreen implements Screen {
         if (indice == 2) {
             return "Jefe de Zona 1: El Bestiario";
         }
-        return "Zona 2: Nivel 1";
+        if (indice == 3) {
+            return "Zona 2: Nivel 1";
+        }
+        return "Jefe de Zona 2: El Destructor";
     }
 
     // Cambiar a la pantalla de la zona elegida.
@@ -230,9 +253,11 @@ public class JuegoScreen implements Screen {
         } else if (etapa == MainClass.ETAPA_ZONA1_NIVEL2) {
             game.setScreen(new MapaScreen(game, "Zona 1", 2));
         } else if (etapa == MainClass.ETAPA_JEFE_ZONA1) {
-            game.setScreen(new ColiseoScreen(game));
+            game.setScreen(new ColiseoScreen(game, false));
         } else if (etapa == MainClass.ETAPA_ZONA2) {
             game.setScreen(new MapaScreen(game, "Zona 2", 1));
+        } else if (etapa == MainClass.ETAPA_JEFE_ZONA2) {
+            game.setScreen(new ColiseoScreen(game, true));
         }
     }
 

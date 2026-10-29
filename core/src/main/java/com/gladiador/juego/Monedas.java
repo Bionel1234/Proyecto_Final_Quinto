@@ -31,6 +31,11 @@ public class Monedas {
         }
     }
 
+    public static void reiniciar() {
+        cantidad = 0;
+        recompensaYaEntregada = false;
+    }
+
     public static boolean gastar(int costo) {
         if (cantidad < costo) {
             return false;

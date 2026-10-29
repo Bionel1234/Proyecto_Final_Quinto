@@ -83,6 +83,9 @@ public class MapaScreen implements Screen {
     // Se llama una sola vez al abrir el nivel: crear todo.
     @Override
     public void show() {
+        // Cada reinicio de partida vuelve a empezar con la vida completa,
+        // manteniendo el progreso del juego pero restaurando el estado del personaje.
+        Vida.restablecer();
         // Inicializa los recursos y el estado cuando LibGDX muestra este nivel.
         configurarCamara();
         fondoMapa = new Texture(Gdx.files.internal("Mapa 1/scene_animated.png"));
@@ -504,8 +507,8 @@ public class MapaScreen implements Screen {
             && mouse.y >= volverY && mouse.y <= volverY + volverAlto;
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             if (reintentarSeleccionado) {
-                Vida.restablecer();
-                game.setScreen(new MapaScreen(game, nombreZona, numeroNivel)); // repetir el nivel
+                game.resetProgreso();
+                game.setScreen(new JuegoScreen(game)); // reinicia la campaña y restaura la vida
             } else if (volverSeleccionado) {
                 game.setScreen(new JuegoScreen(game)); // volver al lobby
             }
