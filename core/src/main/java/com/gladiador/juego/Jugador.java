@@ -38,9 +38,9 @@ public class Jugador {
     private static final String RUTA_ESTATICO_LANZA_IZQUIERDA =
         "jugador/Jorge estatico lanza izquierda-20261029T164925Z-1-001/Jorge estatico lanza izquierda";
     private static final String RUTA_CAMINAR_LANZA_IZQUIERDA =
-        "jugador/Jorge caminar lanza izquierda-20261029T164930Z-1-001/Jorge caminar lanza izquierda";
+        "jugador/caminar_lanza_izquierda";
     private static final String RUTA_CAMINAR_LANZA_DERECHA =
-        "jugador/caminar_derecha";
+        "jugador/caminar_lanza_derecha";
     private static final String RUTA_SALTO_LANZA_DERECHA =
         "jugador/Jorge salto lanza derecha-20261029T164924Z-1-001/Jorge salto lanza derecha";
     private static final String RUTA_SALTO_LANZA_IZQUIERDA =
@@ -72,6 +72,7 @@ public class Jugador {
     // --- "Estados": que esta haciendo Jorge ---
     private boolean miraDerecha = true;      // hacia donde esta mirando
     private boolean estaEnElSuelo = true;    // true si pisa el piso o una plataforma
+    private int saltosRealizados;
     private boolean estaAtacando = false;    // esta en mitad de un tajo
     private boolean estaProtegiendo = false; // tiene el escudo levantado
 
@@ -238,10 +239,11 @@ public class Jugador {
         boolean sePulsoSalto = Gdx.input.isKeyJustPressed(Input.Keys.W)
             || Gdx.input.isKeyJustPressed(Input.Keys.UP);
 
-        // Solo se puede saltar si esta en el suelo y no esta atacando ni bloqueando.
-        if (sePulsoSalto && estaEnElSuelo && !estaAtacando && !estaProtegiendo) {
+        // Jorge puede saltar dos veces antes de volver a tocar el suelo.
+        if (sePulsoSalto && saltosRealizados < 2 && !estaAtacando && !estaProtegiendo) {
             velocidadY = FUERZA_SALTO;
             estaEnElSuelo = false;
+            saltosRealizados++;
             tiempoAnimacion = 0f;
             sonidoSalto.play();
         }
@@ -310,6 +312,7 @@ public class Jugador {
                     y = alturaPlataforma;
                     velocidadY = 0f;
                     estaEnElSuelo = true;
+                    saltosRealizados = 0;
                     return;
                 }
             }
@@ -320,6 +323,7 @@ public class Jugador {
             y = posicionDelSuelo;
             velocidadY = 0f;
             estaEnElSuelo = true;
+            saltosRealizados = 0;
         }
     }
 
@@ -559,8 +563,8 @@ public class Jugador {
         boolean conLanza = lanzaComprada || tieneLanza;
         estaticoDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_ESTATICO_LANZA_DERECHA : RUTA_ESTATICO_NORMAL_DERECHA, 12, 0.10f);
         estaticoIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_ESTATICO_LANZA_IZQUIERDA : RUTA_ESTATICO_NORMAL_IZQUIERDA, 12, 0.10f);
-        caminarDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_CAMINAR_LANZA_DERECHA : "jugador/caminar_derecha", 10, 0.08f);
-        caminarIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_CAMINAR_LANZA_IZQUIERDA : "jugador/caminar_izquierda", 10, 0.08f);
+        caminarDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_CAMINAR_LANZA_DERECHA : "jugador/caminar_derecha", conLanza ? 13 : 10, 0.08f);
+        caminarIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_CAMINAR_LANZA_IZQUIERDA : "jugador/caminar_izquierda", conLanza ? 13 : 10, 0.08f);
         saltoDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_SALTO_LANZA_DERECHA : "jugador/salto_derecha", 13, 0.10f);
         saltoIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_SALTO_LANZA_IZQUIERDA : "jugador/salto_izquierda", 13, 0.10f);
         ataqueDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_ATAQUE_LANZA_DERECHA : "jugador/ataque_derecha", conLanza ? 10 : 12, conLanza ? 0.08f : 0.07f);

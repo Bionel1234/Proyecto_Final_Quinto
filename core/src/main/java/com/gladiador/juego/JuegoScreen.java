@@ -54,7 +54,6 @@ public class JuegoScreen implements Screen {
     // show() se llama al abrir la pantalla: aca se carga TODO.
     @Override
     public void show() {
-        Vida.restablecer();
         configurarCamara();
         cargarMazmorra();
         panelSelector = new Texture(Gdx.files.internal("menu/controles_fondo.png"));
@@ -141,7 +140,7 @@ public class JuegoScreen implements Screen {
         }
         if (hablandoConComerciante) {
             fuente.draw(game.batch, "Mercader: Puedo curarte por 50 monedas.", 430f, 650f);
-            fuente.draw(game.batch, "Pulsa R para curarte por completo.", 430f, 620f);
+            fuente.draw(game.batch, "Pulsa R para curarte por 50 monedas.", 430f, 620f);
             if (!Jugador.tieneLanzaComprada()) {
                 fuente.draw(game.batch, "Pulsa L para comprar la lanza por 1 moneda.", 430f, 600f);
             } else {

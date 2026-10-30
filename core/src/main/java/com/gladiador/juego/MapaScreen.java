@@ -30,9 +30,14 @@ public class MapaScreen implements Screen {
     private static final float DISTANCIA_PUERTA = 320f; // tan cerca hay que estar de la salida
     private static final float DISTANCIA_MINIMA_APARICION = 450f; // lejos de Jorge al aparecer
     private static final float DISTANCIA_MINIMA_ENTRE_ENEMIGOS = 230f;
+    private static final float DISTANCIA_APARICION_ZONA1 = 180f;
+    private static final float SEPARACION_APARICION_ZONA1 = 160f;
     private static final float DURACION_AVISO_OLEADA = 2.5f; // cuanto se ve el cartel "Oleada X"
+    private static final float INTERVALO_REFUERZOS_ZONA1 = 8f;
     private static final int CANTIDAD_OLEADAS = 3;
-    private static final int[] ENEMIGOS_POR_OLEADA = {3, 5, 7}; // cada oleada es mas dura
+    private static final int[] ENEMIGOS_POR_OLEADA = {3, 5, 7};
+    private static final int[] ENEMIGOS_ZONA1_POR_OLEADA = {5, 5, 5};
+    private static final int CANTIDAD_INICIAL_ZONA1 = 3;
     private static final String[] IMAGENES_OLEADA = {"ui/oleada_1.png", "ui/oleada_2.png", "ui/oleada_3.png"};
     private final MainClass game;
     private final String nombreZona;   // "Zona 1" o "Zona 2": cambia enemigos y texto
@@ -58,6 +63,8 @@ public class MapaScreen implements Screen {
     private int oleadaActual;
     private boolean oleadasCompletadas;
     private float tiempoAvisoOleada;
+    private float tiempoRefuerzosZona1;
+    private int enemigosPendientes;
 
     // "Jugo" del combate: el juego se congela un instante al golpear (hitstop),
     // la camara tiembla con los golpes fuertes y el parry muestra un cartel.
@@ -83,9 +90,6 @@ public class MapaScreen implements Screen {
     // Se llama una sola vez al abrir el nivel: crear todo.
     @Override
     public void show() {
-        // Cada reinicio de partida vuelve a empezar con la vida completa,
-        // manteniendo el progreso del juego pero restaurando el estado del personaje.
-        Vida.restablecer();
         // Inicializa los recursos y el estado cuando LibGDX muestra este nivel.
         configurarCamara();
         fondoMapa = new Texture(Gdx.files.internal("Mapa 1/scene_animated.png"));
@@ -149,6 +153,7 @@ public class MapaScreen implements Screen {
         if (tiempoAvisoOleada > 0f) {
             tiempoAvisoOleada = Math.max(0f, tiempoAvisoOleada - deltaReal);
         }
+        actualizarRefuerzosZona1(delta, jugador.getX());
 
         // 1) Jorge se mueve, salta y puede caer sobre las plataformas.
         jugador.actualizar(delta, ALTURA_SUELO, anchoMapa - 220f, plataformas);
@@ -240,7 +245,7 @@ public class MapaScreen implements Screen {
         });
 
         // 6) Si no queda ninguno, arrancar la proxima oleada (o dar el nivel por superado).
-        if (enemigos.isEmpty() && !oleadasCompletadas) {
+        if (enemigos.isEmpty() && enemigosPendientes == 0 && !oleadasCompletadas) {
             if (oleadaActual < CANTIDAD_OLEADAS) {
                 oleadaActual++;
                 iniciarOleada(jugador.getX());
@@ -291,13 +296,15 @@ public class MapaScreen implements Screen {
                 fuente.draw(game.batch, "Pulsa ENTER para volver al lobby",
                     anchoMapa - 300f - scroll, 245f);
             }
-        } else if (tiempoAvisoOleada > 0f) {
-            // Cartel de "Oleada 1/2/3" centrado arriba.
-            Texture imagenOleada = imagenesOleada[oleadaActual - 1];
-            float anchoImagen = 780f;
-            float altoImagen = anchoImagen * imagenOleada.getHeight() / imagenOleada.getWidth();
-            game.batch.draw(imagenOleada, (ANCHO - anchoImagen) / 2f, ALTO - altoImagen - 30f,
-                anchoImagen, altoImagen);
+        } else {
+            fuente.draw(game.batch, "Oleada " + oleadaActual + "/" + CANTIDAD_OLEADAS, 80f, 680f);
+            if (tiempoAvisoOleada > 0f) {
+                Texture imagenOleada = imagenesOleada[oleadaActual - 1];
+                float anchoImagen = 780f;
+                float altoImagen = anchoImagen * imagenOleada.getHeight() / imagenOleada.getWidth();
+                game.batch.draw(imagenOleada, (ANCHO - anchoImagen) / 2f, ALTO - altoImagen - 30f,
+                    anchoImagen, altoImagen);
+            }
         }
         if (tiempoTextoParry > 0f) {
             // El cartel "PARRY!" flotando sobre Jorge.
@@ -313,9 +320,8 @@ public class MapaScreen implements Screen {
         if (oleadasCompletadas
             && jugador.getX() >= anchoMapa - DISTANCIA_PUERTA
             && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-            Monedas.recompensarPrimerMapa();
+            Monedas.recompensarNivelCompletado();
             game.registrarEtapaCompletada(etapaProgresion);
-            vida.curarCompleto();
             game.setScreen(new JuegoScreen(game));
             return;
         }
@@ -380,16 +386,67 @@ public class MapaScreen implements Screen {
         // Vacía la ronda anterior y crea la cantidad de enemigos de esta oleada.
         enemigos.clear();
         tiempoAvisoOleada = DURACION_AVISO_OLEADA;
-        int cantidadEnemigos = ENEMIGOS_POR_OLEADA[oleadaActual - 1];
-        for (int i = 0; i < cantidadEnemigos; i++) {
-            float x = buscarPosicionAparicion(jugadorX);
-            float velocidadBase = 80f + MathUtils.random(0f, 24f) + oleadaActual * 4f;
-            enemigos.add(new Enemigo(x, ALTURA_SUELO, velocidadBase, seleccionarTipoEnemigo(), nombreZona));
+        int[] cantidadesPorOleada = "Zona 1".equals(nombreZona)
+            ? ENEMIGOS_ZONA1_POR_OLEADA : ENEMIGOS_POR_OLEADA;
+        int cantidadEnemigos = cantidadesPorOleada[oleadaActual - 1];
+        int cantidadInicial = "Zona 1".equals(nombreZona)
+            ? Math.min(CANTIDAD_INICIAL_ZONA1, cantidadEnemigos) : cantidadEnemigos;
+        enemigosPendientes = cantidadEnemigos - cantidadInicial;
+        tiempoRefuerzosZona1 = 0f;
+        for (int i = 0; i < cantidadInicial; i++) {
+            agregarEnemigoOleada(jugadorX, i);
         }
     }
 
+    private void actualizarRefuerzosZona1(float delta, float jugadorX) {
+        if (!"Zona 1".equals(nombreZona) || enemigosPendientes == 0) {
+            return;
+        }
+        tiempoRefuerzosZona1 += delta;
+        if (tiempoRefuerzosZona1 < INTERVALO_REFUERZOS_ZONA1) {
+            return;
+        }
+        int primerIndice = ENEMIGOS_ZONA1_POR_OLEADA[oleadaActual - 1] - enemigosPendientes;
+        for (int i = 0; i < enemigosPendientes; i++) {
+            agregarEnemigoOleada(jugadorX, primerIndice + i);
+        }
+        enemigosPendientes = 0;
+        tiempoRefuerzosZona1 = 0f;
+    }
+
+    private void agregarEnemigoOleada(float jugadorX, int indiceEnemigo) {
+            float x = buscarPosicionAparicion(jugadorX);
+            Enemigo.TipoEnemigo tipo = seleccionarTipoEnemigo(indiceEnemigo);
+            float velocidadBase = "Zona 1".equals(nombreZona)
+                ? obtenerVelocidadBaseZona1(tipo)
+                : 80f + MathUtils.random(0f, 24f) + oleadaActual * 4f;
+            enemigos.add(new Enemigo(x, ALTURA_SUELO, velocidadBase, tipo, nombreZona));
+    }
+
     // Elegir el tipo al azar, con mas probabilidad de tipos duros en las oleadas avanzadas.
-    private Enemigo.TipoEnemigo seleccionarTipoEnemigo() {
+    private Enemigo.TipoEnemigo seleccionarTipoEnemigo(int indiceEnemigo) {
+        if ("Zona 1".equals(nombreZona)) {
+            if (oleadaActual == 1) {
+                return indiceEnemigo == 1
+                    ? Enemigo.TipoEnemigo.AGIL : Enemigo.TipoEnemigo.BASICO;
+            }
+            if (oleadaActual == 2) {
+                if (indiceEnemigo == 0) {
+                    return Enemigo.TipoEnemigo.BRUTO;
+                }
+                return indiceEnemigo == 1
+                    ? Enemigo.TipoEnemigo.AGIL : Enemigo.TipoEnemigo.BASICO;
+            }
+            Enemigo.TipoEnemigo[] tiposOleadaTres = {
+                Enemigo.TipoEnemigo.ELITE,
+                Enemigo.TipoEnemigo.AGIL,
+                Enemigo.TipoEnemigo.BRUTO,
+                Enemigo.TipoEnemigo.BASICO,
+                Enemigo.TipoEnemigo.AGIL
+            };
+            return tiposOleadaTres[indiceEnemigo];
+        }
+
         float aleatorio = MathUtils.random(); // numero entre 0 y 1
         if (oleadaActual >= 3 && aleatorio < 0.18f + (oleadaActual - 1) * 0.10f) {
             return Enemigo.TipoEnemigo.ELITE;
@@ -403,12 +460,35 @@ public class MapaScreen implements Screen {
         return Enemigo.TipoEnemigo.BASICO;
     }
 
+    private float obtenerVelocidadBaseZona1(Enemigo.TipoEnemigo tipo) {
+        float variacionPorOleada = (oleadaActual - 1) * 3f;
+        if (tipo == Enemigo.TipoEnemigo.AGIL) {
+            return (MathUtils.random(165f, 185f) + variacionPorOleada) / tipo.multiplicador;
+        }
+        if (tipo == Enemigo.TipoEnemigo.BRUTO) {
+            return (MathUtils.random(70f, 85f) + variacionPorOleada) / tipo.multiplicador;
+        }
+        if (tipo == Enemigo.TipoEnemigo.ELITE) {
+            return (MathUtils.random(130f, 150f) + variacionPorOleada) / tipo.multiplicador;
+        }
+        return (MathUtils.random(105f, 120f) + variacionPorOleada) / tipo.multiplicador;
+    }
+
     // Probar hasta 80 posiciones al azar y quedarse con la primera "buena":
     // lejos de Jorge y lejos de otros enemigos.
     // Busca un sitio de aparicion suficientemente lejos del jugador y otros enemigos.
     private float buscarPosicionAparicion(float jugadorX) {
         float limiteMinimo = 60f;
         float limiteMaximo = anchoMapa - 220f;
+        float distanciaMinimaJugador = DISTANCIA_MINIMA_APARICION;
+        float distanciaMinimaEnemigos = DISTANCIA_MINIMA_ENTRE_ENEMIGOS;
+        if ("Zona 1".equals(nombreZona)) {
+            float scroll = Math.min(Math.max(0f, jugadorX - 180f), anchoMapa - ANCHO);
+            limiteMinimo = Math.max(limiteMinimo, scroll + 150f);
+            limiteMaximo = Math.min(limiteMaximo, scroll + ANCHO - 150f);
+            distanciaMinimaJugador = DISTANCIA_APARICION_ZONA1;
+            distanciaMinimaEnemigos = SEPARACION_APARICION_ZONA1;
+        }
         float mejorPosicion = limiteMinimo;
         float mejorDistancia = -1f;
 
@@ -421,8 +501,8 @@ public class MapaScreen implements Screen {
                 mejorDistancia = distanciaMinima;
                 mejorPosicion = posicion;
             }
-            if (distanciaJugador >= DISTANCIA_MINIMA_APARICION
-                && distanciaEnemigos >= DISTANCIA_MINIMA_ENTRE_ENEMIGOS) {
+            if (distanciaJugador >= distanciaMinimaJugador
+                && distanciaEnemigos >= distanciaMinimaEnemigos) {
                 return posicion; // encontramos un lugar bueno, no seguimos buscando
             }
         }

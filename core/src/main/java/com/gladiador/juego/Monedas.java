@@ -10,8 +10,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 // no importa en que pantalla este Jorge.
 public class Monedas {
 
-    private static int cantidad;                   // monedas que tiene el jugador
-    private static boolean recompensaYaEntregada;  // para que el premio solo se cobre una vez
+    private static int cantidad=1;                   // monedas que tiene el jugador
 
     private final Texture imagen;
     private final BitmapFont fuente;
@@ -22,18 +21,16 @@ public class Monedas {
         fuente = new BitmapFont(); // fuente por defecto de LibGDX, para textos simples
     }
 
-    // Al terminar el primer mapa se cobran 100 monedas, solo la primera vez.
-    public static void recompensarPrimerMapa() {
-        // La marca evita que repetir el nivel vuelva a otorgar el mismo premio.
-        if (!recompensaYaEntregada) {
-            cantidad += 100;
-            recompensaYaEntregada = true;
-        }
+    public static void recompensarNivelCompletado() {
+        cantidad += 50;
+    }
+
+    public static void recompensarJefeDerrotado() {
+        cantidad += 100;
     }
 
     public static void reiniciar() {
         cantidad = 0;
-        recompensaYaEntregada = false;
     }
 
     public static boolean gastar(int costo) {
