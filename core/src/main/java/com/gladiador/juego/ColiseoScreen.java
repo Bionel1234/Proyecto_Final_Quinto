@@ -1,20 +1,27 @@
 package com.gladiador.juego;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.utils.GdxRuntimeException;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
 // Combate contra el jefe "El Bestiario" en la arena del Coliseo.
@@ -25,6 +32,8 @@ public class ColiseoScreen implements Screen {
     private static final float POSICION_INICIAL_JUGADOR = 180f; // donde aparece Jorge
     private static final float LIMITE_JUGADOR = JuegoScreen.ANCHO - 180f; // pared invisible del fondo
     private static final float DURACION_CARTEL_JEFE = 2.5f;    // cuanto se ve el cartel del jefe
+    private static final float DURACION_FRAME_FONDO = 0.08f;
+    private static final String RUTA_ANIMACION_FONDO = "coliseo_animacion.zip";
 
     private final MainClass game;
     private final boolean jefeZona2;
@@ -33,6 +42,9 @@ public class ColiseoScreen implements Screen {
     private OrthographicCamera camera;
     private Viewport viewport;
     private Texture fondo;
+    private byte[] datosAnimacionFondo;
+    private ZipInputStream lectorAnimacionFondo;
+    private float tiempoFrameFondo;
     private Texture pantallaGameOver;
     private Texture cartelJefe;      // cartel "jefe" que se muestra al empezar
     private Jugador jugador;
@@ -59,15 +71,13 @@ public class ColiseoScreen implements Screen {
     // Prepara escenario, personaje, jefe e interfaz al entrar al combate.
     @Override
     public void show() {
-        Vida.restablecer();
         camera = new OrthographicCamera();
         viewport = new FitViewport(JuegoScreen.ANCHO, JuegoScreen.ALTO, camera);
         viewport.apply(true);
         camera.position.set(JuegoScreen.ANCHO / 2f, JuegoScreen.ALTO / 2f, 0f);
         camera.update();
 
-        fondo = new Texture(Gdx.files.internal("coliseo_fondo.png"));
-        fondo.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        cargarFondoAnimado();
         pantallaGameOver = new Texture(Gdx.files.internal("ui/gameover.png"));
         cartelJefe = new Texture(Gdx.files.internal("ui/oleada_jefe.png"));
         jugador = new Jugador(POSICION_INICIAL_JUGADOR, PISO);
@@ -78,9 +88,68 @@ public class ColiseoScreen implements Screen {
         tiempoCartelJefe = DURACION_CARTEL_JEFE;
     }
 
+    private void cargarFondoAnimado() {
+        datosAnimacionFondo = Gdx.files.internal(RUTA_ANIMACION_FONDO).readBytes();
+        lectorAnimacionFondo = new ZipInputStream(new ByteArrayInputStream(datosAnimacionFondo));
+        cargarSiguienteFrameFondo();
+    }
+
+    private void actualizarFondoAnimado(float delta) {
+        tiempoFrameFondo += delta;
+        while (tiempoFrameFondo >= DURACION_FRAME_FONDO) {
+            tiempoFrameFondo -= DURACION_FRAME_FONDO;
+            cargarSiguienteFrameFondo();
+        }
+    }
+
+    private void cargarSiguienteFrameFondo() {
+        try {
+            ZipEntry entrada = lectorAnimacionFondo.getNextEntry();
+            if (entrada == null) {
+                lectorAnimacionFondo.close();
+                lectorAnimacionFondo = new ZipInputStream(
+                    new ByteArrayInputStream(datosAnimacionFondo));
+                entrada = lectorAnimacionFondo.getNextEntry();
+                if (entrada == null) {
+                    throw new GdxRuntimeException("La animacion del Coliseo no contiene cuadros.");
+                }
+            }
+
+            ByteArrayOutputStream bytesCuadro = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int cantidadLeida;
+            while ((cantidadLeida = lectorAnimacionFondo.read(buffer)) != -1) {
+                bytesCuadro.write(buffer, 0, cantidadLeida);
+            }
+            lectorAnimacionFondo.closeEntry();
+
+            byte[] datosCuadro = bytesCuadro.toByteArray();
+            Pixmap cuadro = new Pixmap(datosCuadro, 0, datosCuadro.length);
+            try {
+                if (fondo == null) {
+                    fondo = new Texture(cuadro);
+                    fondo.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                } else {
+                    if (cuadro.getWidth() != fondo.getWidth()
+                            || cuadro.getHeight() != fondo.getHeight()) {
+                        throw new GdxRuntimeException("Los cuadros de la animacion del Coliseo "
+                            + "no tienen el mismo tamano.");
+                    }
+                    fondo.draw(cuadro, 0, 0);
+                }
+            } finally {
+                cuadro.dispose();
+            }
+        } catch (IOException e) {
+            throw new GdxRuntimeException("No se pudo leer la animacion del Coliseo.", e);
+        }
+    }
+
     // Actualiza el combate y dibuja el estado actual del Coliseo.
     @Override
     public void render(float deltaReal) {
+        actualizarFondoAnimado(deltaReal);
+
         // Congelar el combate durante el hitstop (los efectos siguen corriendo).
         float delta = deltaReal;
         if (!finDelJuego && tiempoHitstop > 0f) {
@@ -99,8 +168,8 @@ public class ColiseoScreen implements Screen {
         }
         if (victoria) {
             int etapaGanada = jefeZona2 ? MainClass.ETAPA_JEFE_ZONA2 : MainClass.ETAPA_JEFE_ZONA1;
+            Monedas.recompensarEtapa(etapaGanada);
             game.registrarEtapaCompletada(etapaGanada);
-            vida.curarCompleto();
             game.setScreen(new JuegoScreen(game));
             return;
         }
@@ -154,7 +223,7 @@ public class ColiseoScreen implements Screen {
     // Todo lo que pasa en un frame de combate.
     private void actualizarCombate(float delta) {
         jugador.actualizar(delta, PISO, LIMITE_JUGADOR, List.of());
-        jefe.actualizar(delta);
+        jefe.actualizar(delta, jugador.getCentroX());
 
         // El jefe aviso que invoco un leon: crearlo a su lado, saliendo de la derecha.
         if (jefe.consumirInvocacionLeon()) {
@@ -162,6 +231,13 @@ public class ColiseoScreen implements Screen {
             float xLeon = jefe.getCentroX() - 165f - anchoLeon;
             leones.add(new LeonInvocado(xLeon, PISO));
             tiempoTemblor = 0.12f; // la invocacion se "siente"
+        }
+
+        if (jefe.getAtaqueActual() == BestiarioJefe.Ataque.EMBESTIDA
+                && jefe.getHitbox().overlaps(jugador.getHitbox())
+                && jefe.registrarImpactoEmbestida()) {
+            resolverAtaqueDelJefe(jefe.getCentroX());
+            tiempoTemblor = 0.15f;
         }
 
         // Jorge le pega al jefe: solo durante los frames activos del tajo.
@@ -206,7 +282,7 @@ public class ColiseoScreen implements Screen {
         }
 
         // ¿Termino el combate?
-        if (!jefe.estaVivo()) {
+        if (jefe.terminoAnimacionMuerte()) {
             victoria = true;
             finDelJuego = true;
         } else if (!vida.estaVivo()) {
@@ -298,7 +374,8 @@ public class ColiseoScreen implements Screen {
                 game.resetProgreso();
                 game.setScreen(new JuegoScreen(game)); // reinicia la campaña y restaura la vida
             } else if (volverSeleccionado) {
-                game.setScreen(new JuegoScreen(game)); // volver al lobby
+                game.resetProgreso();
+                game.setScreen(new MenuScreen(game)); // volver al menu principal
             }
         }
     }
@@ -331,6 +408,14 @@ public class ColiseoScreen implements Screen {
         if (fondo != null) {
             fondo.dispose();
         }
+        if (lectorAnimacionFondo != null) {
+            try {
+                lectorAnimacionFondo.close();
+            } catch (IOException e) {
+                throw new GdxRuntimeException("No se pudo liberar la animacion del Coliseo.", e);
+            }
+        }
+        datosAnimacionFondo = null;
         if (pantallaGameOver != null) {
             pantallaGameOver.dispose();
         }

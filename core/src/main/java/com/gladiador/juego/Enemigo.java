@@ -108,6 +108,8 @@ public class Enemigo {
     private boolean impactoResuelto = false;   // el tajo actual ya pego (o lo bloquearon)
     private float esperaAtaque = 0f;           // cuanto falta para descargar el tajo
     private float tiempoAturdido = 0f;         // segundos que tarda en reaccionar
+    private float tiempoRetrocesoChoque;
+    private float direccionRetrocesoChoque;
     private float tiempoDanio = 0f;            // para parpadear en rojo al recibir golpe
     private float tiempoBloqueo = 0f;          // destello blanco al frenar un golpe con el escudo
     private float tiempoMuerte = 0f;           // progreso de la animacion de muerte
@@ -188,6 +190,15 @@ public class Enemigo {
         // Aturdido: congelado, no puede hacer nada hasta recuperarse.
         if (tiempoAturdido > 0f) {
             tiempoAturdido = Math.max(0f, tiempoAturdido - delta);
+            return;
+        }
+
+        if (tiempoRetrocesoChoque > 0f) {
+            tiempoRetrocesoChoque = Math.max(0f, tiempoRetrocesoChoque - delta);
+            miraDerecha = direccionRetrocesoChoque > 0f;
+            x += direccionRetrocesoChoque * velocidad * delta;
+            limitarX();
+            tiempoAnimacion += delta;
             return;
         }
 
@@ -328,6 +339,14 @@ public class Enemigo {
     public void aplicarSeparacion(float desplazamientoX) {
         x += desplazamientoX;
         limitarX();
+    }
+
+    public void reaccionarAlChoque(float direccion) {
+        direccionRetrocesoChoque = Math.signum(direccion);
+        tiempoRetrocesoChoque = 0.22f;
+        atacando = false;
+        preparandoAtaque = false;
+        tiempoAnimacionAtaque = 0f;
     }
 
     // Cortar cualquier accion de ataque/defensa que estuviera haciendo.

@@ -25,8 +25,12 @@ public class Jugador {
     private Animation<TextureRegion> caminarIzquierda;
     private Animation<TextureRegion> saltoDerecha;
     private Animation<TextureRegion> saltoIzquierda;
+    private Animation<TextureRegion> dashDerecha;
+    private Animation<TextureRegion> dashIzquierda;
     private Animation<TextureRegion> ataqueDerecha;
     private Animation<TextureRegion> ataqueIzquierda;
+    private Animation<TextureRegion> ataqueLanzaAlternoDerecha;
+    private Animation<TextureRegion> ataqueLanzaAlternoIzquierda;
     private Animation<TextureRegion> escudo;
 
     private static final String RUTA_ESTATICO_NORMAL_DERECHA =
@@ -34,23 +38,34 @@ public class Jugador {
     private static final String RUTA_ESTATICO_NORMAL_IZQUIERDA =
         "jugador/Pj principal estatico izquierda-20261029T164915Z-1-001/Pj principal estatico izquierda";
     private static final String RUTA_ESTATICO_LANZA_DERECHA =
-        "jugador/Jorge estatico lanza derecha-20261029T164927Z-1-001/Jorge estatico lanza derecha";
+        "jugador/estatico_corregido/derecha";
     private static final String RUTA_ESTATICO_LANZA_IZQUIERDA =
-        "jugador/Jorge estatico lanza izquierda-20261029T164925Z-1-001/Jorge estatico lanza izquierda";
+        "jugador/estatico_corregido/izquierda";
     private static final String RUTA_CAMINAR_LANZA_IZQUIERDA =
-        "jugador/Jorge caminar lanza izquierda-20261029T164930Z-1-001/Jorge caminar lanza izquierda";
+        "jugador/lanza_corregida/caminar_izquierda";
     private static final String RUTA_CAMINAR_LANZA_DERECHA =
-        "jugador/caminar_derecha";
+        "jugador/lanza_corregida/caminar_derecha";
     private static final String RUTA_SALTO_LANZA_DERECHA =
-        "jugador/Jorge salto lanza derecha-20261029T164924Z-1-001/Jorge salto lanza derecha";
+        "jugador/lanza_corregida/salto_derecha";
     private static final String RUTA_SALTO_LANZA_IZQUIERDA =
-        "jugador/Jorge salto lanza izquierda-20261029T164922Z-1-001/Jorge salto lanza izquierda";
+        "jugador/lanza_corregida/salto_izquierda";
     private static final String RUTA_ATAQUE_LANZA_DERECHA =
-        "jugador/Jorge ataque lanza derecha-20261029T164934Z-1-001/Jorge ataque lanza derecha";
+        "jugador/lanza_corregida/ataque_derecha";
     private static final String RUTA_ATAQUE_LANZA_IZQUIERDA =
-        "jugador/Jorge ataque lanza izquierda-20261029T164932Z-1-001/Jorge ataque lanza izquierda";
+        "jugador/lanza_corregida/ataque_izquierda";
+    private static final String RUTA_ATAQUE_LANZA_ALTERNO_DERECHA =
+        "jugador/lanza_corregida/ataque_2_derecha";
+    private static final String RUTA_ATAQUE_LANZA_ALTERNO_IZQUIERDA =
+        "jugador/lanza_corregida/ataque_2_izquierda";
+    private static final String RUTA_ATAQUE_ESPADA_DERECHA =
+        "jugador/ataque_corregido/espada_derecha";
+    private static final String RUTA_ATAQUE_ESPADA_IZQUIERDA =
+        "jugador/ataque_corregido/espada_izquierda";
+    private static final int FRAMES_ATAQUE_LANZA = 15;
+    private static final int FRAMES_ATAQUE_LANZA_ALTERNO = 7;
 
     private static boolean lanzaComprada = false;
+    private static boolean lanzaEquipada = false;
     private boolean tieneLanza;
 
     // Lista con todas las imagenes cargadas, para liberarlas al cerrar la pantalla.
@@ -72,16 +87,24 @@ public class Jugador {
     // --- "Estados": que esta haciendo Jorge ---
     private boolean miraDerecha = true;      // hacia donde esta mirando
     private boolean estaEnElSuelo = true;    // true si pisa el piso o una plataforma
+    private int saltosRealizados;
     private boolean estaAtacando = false;    // esta en mitad de un tajo
     private boolean estaProtegiendo = false; // tiene el escudo levantado
+    private boolean estaDasheando;
+    private float direccionDash;
 
     // --- Temporisadores de cada accion ---
     private float tiempoAnimacion = 0f; // tiempo de la animacion actual
     private float tiempoAtaque = 0f;    // tiempo que lleva el tajo en curso
     private float tiempoEscudo = 0f;    // tiempo que lleva el escudo levantado
+    private float tiempoDash;
+    private float cooldownDash;
     private long numeroAtaque;          // contador de tajos (evita que un tajo pegue dos veces)
     private boolean escudoMiraDerecha = true;   // direccion del escudo actual
     private boolean ataqueMiraDerecha = true;   // direccion del tajo actual (no cambia en el medio)
+    private boolean siguienteAtaqueLanzaAlterno;
+    private boolean usarAtaqueLanzaAlterno;
+    private float duracionAtaqueActual = DURACION_ATAQUE;
 
     // --- Tiempo de espera y defensas ---
     private float cooldownEscudo = 0f;       // tiempo antes de poder usar el escudo otra vez
@@ -92,6 +115,9 @@ public class Jugador {
 
     // --- Numeros del movimiento (asi se ajustan facil las "fisicas") ---
     private static final float VELOCIDAD_CAMINAR = 260f; // pixeles por segundo
+    private static final float VELOCIDAD_DASH = 600f;
+    private static final float DURACION_DASH = 11 * 0.04f;
+    private static final float COOLDOWN_DASH = 0.75f;
     private static final float FUERZA_SALTO = 720f;      // impulso inicial del salto
     private static final float GRAVEDAD = 1500f;         // fuerza que lo hace caer
 
@@ -99,10 +125,12 @@ public class Jugador {
     private static final float ANCHO_PERSONAJE = 180f;
     private static final float ALTO_VISIBLE_PERSONAJE = 137f;
 
-    // Ataque: 12 frames de 0.07 segundos. El tajo real (hace dano) esta en los frames 5 a 7.
+    // El golpe se registra en la segunda mitad de la animacion, cuando el arma ya se ve atacar.
     private static final float DURACION_ATAQUE = 12 * 0.07f;
-    private static final float ATAQUE_ACTIVO_DESDE = 0.28f;
-    private static final float ATAQUE_ACTIVO_HASTA = 0.49f;
+    private static final float FRACCION_INICIO_GOLPE = 0.50f;
+    private static final float FRACCION_FIN_GOLPE = 0.75f;
+    private float inicioAtaqueActivo;
+    private float finAtaqueActivo;
     // Pequeno paso hacia adelante al tajar, para que el golpe "pese".
     private static final float INICIO_IMPULSO = 0.14f;
     private static final float VELOCIDAD_IMPULSO = 150f;
@@ -124,7 +152,7 @@ public class Jugador {
     public Jugador(float posicionInicialX, float posicionInicialY) {
         x = posicionInicialX;
         y = posicionInicialY;
-        tieneLanza = lanzaComprada;
+        tieneLanza = lanzaComprada && lanzaEquipada;
 
         // Cargar las imagenes de todas las animaciones y los sonidos.
         cargarTodasLasAnimaciones();
@@ -136,6 +164,7 @@ public class Jugador {
 
     public static void comprarLanza() {
         lanzaComprada = true;
+        lanzaEquipada = true;
     }
 
     public static boolean tieneLanzaComprada() {
@@ -144,11 +173,20 @@ public class Jugador {
 
     public static void resetLanza() {
         lanzaComprada = false;
+        lanzaEquipada = false;
     }
 
     public void setLanzaComprada(boolean comprada) {
         tieneLanza = comprada;
         lanzaComprada = comprada;
+        lanzaEquipada = comprada;
+        estaAtacando = false;
+        estaProtegiendo = false;
+        tiempoAtaque = 0f;
+        tiempoEscudo = 0f;
+        siguienteAtaqueLanzaAlterno = false;
+        usarAtaqueLanzaAlterno = false;
+        duracionAtaqueActual = DURACION_ATAQUE;
         cargarTodasLasAnimaciones();
     }
 
@@ -160,7 +198,11 @@ public class Jugador {
     // delta = segundos desde el frame anterior; posicionDelSuelo = altura del piso;
     // limiteMaximoX = hasta donde puede caminar; plataformas = plataformas donde puede aterrizar.
     public void actualizar(float delta, float posicionDelSuelo, float limiteMaximoX, List<Rectangle> plataformas) {
+        if (lanzaComprada && Gdx.input.isKeyJustPressed(Input.Keys.L)) {
+            alternarArma();
+        }
         tiempoAnimacion = tiempoAnimacion + delta;
+        cooldownDash = Math.max(0f, cooldownDash - delta);
 
         // La invulnerabilidad post-golpe se va apagando sola.
         if (tiempoInvulnerable > 0f) {
@@ -171,6 +213,8 @@ public class Jugador {
             // Aturdido: no se puede atacar, protegerse ni caminar.
             tiempoAturdido = Math.max(0f, tiempoAturdido - delta);
             velocidadX = 0f;
+            estaDasheando = false;
+            tiempoDash = 0f;
         } else {
             actualizarEscudo(delta);
             revisarAtaque(delta);
@@ -183,10 +227,25 @@ public class Jugador {
         actualizarSonidoCaminar();
     }
 
+    private void alternarArma() {
+        tieneLanza = !tieneLanza;
+        lanzaEquipada = tieneLanza;
+        estaAtacando = false;
+        estaProtegiendo = false;
+        tiempoAtaque = 0f;
+        tiempoEscudo = 0f;
+        siguienteAtaqueLanzaAlterno = false;
+        usarAtaqueLanzaAlterno = false;
+        duracionAtaqueActual = DURACION_ATAQUE;
+        tiempoAnimacion = 0f;
+        cargarTodasLasAnimaciones();
+    }
+
     // El sonido de pasos es un loop que se prende al caminar y se apaga al parar.
     private void actualizarSonidoCaminar() {
         boolean caminando = estaEnElSuelo
             && tiempoAturdido <= 0f
+            && !estaDasheando
             && !estaProtegiendo
             && (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.D))
             && Math.abs(velocidadX) > 1f;
@@ -203,7 +262,7 @@ public class Jugador {
         escalaVisual = escala;
     }
 
-    // Leer las teclas A, D, W y flecha arriba.
+    // Leer las teclas A, D, W, flecha arriba y Q para el dash.
     private void revisarMovimiento(float delta) {
         // Primero suponemos que Jorge esta quieto.
         velocidadX = 0f;
@@ -219,11 +278,37 @@ public class Jugador {
             direccion = 1f;
         }
 
+        if (estaDasheando) {
+            tiempoDash += delta;
+            if (tiempoDash >= DURACION_DASH) {
+                estaDasheando = false;
+                tiempoDash = 0f;
+                tiempoAnimacion = 0f;
+                return;
+            }
+            velocidadX = direccionDash * VELOCIDAD_DASH;
+            x += velocidadX * delta;
+            return;
+        }
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.Q)
+                && cooldownDash <= 0f && !estaAtacando) {
+            direccionDash = direccion != 0f ? direccion : (miraDerecha ? 1f : -1f);
+            miraDerecha = direccionDash > 0f;
+            estaDasheando = true;
+            tiempoDash = 0f;
+            cooldownDash = COOLDOWN_DASH;
+            tiempoAnimacion = 0f;
+            velocidadX = direccionDash * VELOCIDAD_DASH;
+            x += velocidadX * delta;
+            return;
+        }
+
         if (estaAtacando) {
             // Durante el ataque Jorge no gira y casi no se puede mover,
             // pero el tajo lo empuja un poco hacia adelante.
             velocidadX = direccion * VELOCIDAD_CAMINAR * CONTROL_DURANTE_ATAQUE;
-            if (tiempoAtaque >= INICIO_IMPULSO && tiempoAtaque <= ATAQUE_ACTIVO_HASTA) {
+            if (tiempoAtaque >= INICIO_IMPULSO && tiempoAtaque <= finAtaqueActivo) {
                 velocidadX += (ataqueMiraDerecha ? 1f : -1f) * VELOCIDAD_IMPULSO;
             }
         } else if (direccion != 0f) {
@@ -235,13 +320,14 @@ public class Jugador {
         x = x + velocidadX * delta;
 
         // Detectar el inicio de un salto.
-        boolean sePulsoSalto = Gdx.input.isKeyJustPressed(Input.Keys.W)
+        boolean sePulsoSalto = Gdx.input.isKeyJustPressed(Input.Keys.SPACE)
             || Gdx.input.isKeyJustPressed(Input.Keys.UP);
 
-        // Solo se puede saltar si esta en el suelo y no esta atacando ni bloqueando.
-        if (sePulsoSalto && estaEnElSuelo && !estaAtacando && !estaProtegiendo) {
+        // Jorge puede saltar una vez en el suelo y una segunda vez en el aire.
+        if (sePulsoSalto && saltosRealizados < 2 && !estaAtacando && !estaProtegiendo) {
             velocidadY = FUERZA_SALTO;
             estaEnElSuelo = false;
+            saltosRealizados++;
             tiempoAnimacion = 0f;
             sonidoSalto.play();
         }
@@ -273,7 +359,7 @@ public class Jugador {
         boolean inicioEscudo = Gdx.input.isKeyJustPressed(Input.Keys.E)
             || Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT);
         // Solo se puede cancelar un ataque con el escudo cuando ya esta en recuperacion.
-        boolean puedeCancelarAtaque = !estaAtacando || tiempoAtaque >= ATAQUE_ACTIVO_HASTA;
+        boolean puedeCancelarAtaque = !estaAtacando || tiempoAtaque >= finAtaqueActivo;
         if (inicioEscudo && cooldownEscudo <= 0f && puedeCancelarAtaque) {
             // Con A o D presionadas, el escudo se levanta mirando para ese lado.
             boolean izquierda = Gdx.input.isKeyPressed(Input.Keys.A);
@@ -310,6 +396,7 @@ public class Jugador {
                     y = alturaPlataforma;
                     velocidadY = 0f;
                     estaEnElSuelo = true;
+                    saltosRealizados = 0;
                     return;
                 }
             }
@@ -320,6 +407,7 @@ public class Jugador {
             y = posicionDelSuelo;
             velocidadY = 0f;
             estaEnElSuelo = true;
+            saltosRealizados = 0;
         }
     }
 
@@ -337,8 +425,7 @@ public class Jugador {
 
     // Revisar el ataque con la tecla espacio o el boton izquierdo del mouse.
     private void revisarAtaque(float delta) {
-        boolean sePulsoAtaque = Gdx.input.isKeyJustPressed(Input.Keys.SPACE)
-            || Gdx.input.isButtonJustPressed(Input.Buttons.LEFT);
+        boolean sePulsoAtaque = Gdx.input.isButtonJustPressed(Input.Buttons.LEFT);
 
         if (sePulsoAtaque && !estaProtegiendo && !estaAtacando) {
             iniciarAtaque();
@@ -346,7 +433,7 @@ public class Jugador {
 
         if (estaAtacando) {
             tiempoAtaque = tiempoAtaque + delta;
-            if (tiempoAtaque >= DURACION_ATAQUE) {
+            if (tiempoAtaque >= duracionAtaqueActual) {
                 estaAtacando = false;
                 tiempoAtaque = 0f;
                 tiempoAnimacion = 0f;
@@ -365,6 +452,15 @@ public class Jugador {
             miraDerecha = true;
         }
         ataqueMiraDerecha = miraDerecha;
+        usarAtaqueLanzaAlterno = tieneLanza && siguienteAtaqueLanzaAlterno;
+        if (tieneLanza) {
+            siguienteAtaqueLanzaAlterno = !siguienteAtaqueLanzaAlterno;
+        }
+        duracionAtaqueActual = tieneLanza && usarAtaqueLanzaAlterno
+            ? FRAMES_ATAQUE_LANZA_ALTERNO * 0.08f
+            : DURACION_ATAQUE;
+        inicioAtaqueActivo = duracionAtaqueActual * FRACCION_INICIO_GOLPE;
+        finAtaqueActivo = duracionAtaqueActual * FRACCION_FIN_GOLPE;
 
         estaAtacando = true;
         tiempoAtaque = 0f;
@@ -434,8 +530,8 @@ public class Jugador {
     // true solo durante los frames en los que la espada realmente corta.
     public boolean estaAtaqueActivo() {
         return estaAtacando
-            && tiempoAtaque >= ATAQUE_ACTIVO_DESDE
-            && tiempoAtaque <= ATAQUE_ACTIVO_HASTA;
+            && tiempoAtaque >= inicioAtaqueActivo
+            && tiempoAtaque <= finAtaqueActivo;
     }
 
     // Identificador del tajo actual: sirve para que un mismo tajo no pegue dos veces.
@@ -506,12 +602,22 @@ public class Jugador {
             return escudo.getKeyFrame(tiempoEscudo, false);
         }
 
+        if (estaDasheando) {
+            return miraDerecha
+                ? dashDerecha.getKeyFrame(tiempoDash, false)
+                : dashIzquierda.getKeyFrame(tiempoDash, false);
+        }
+
         // Si esta atacando, la animacion mira SIEMPRE hacia donde empezo el tajo.
         if (estaAtacando) {
+            Animation<TextureRegion> ataqueDerechaActual = usarAtaqueLanzaAlterno
+                ? ataqueLanzaAlternoDerecha : ataqueDerecha;
+            Animation<TextureRegion> ataqueIzquierdaActual = usarAtaqueLanzaAlterno
+                ? ataqueLanzaAlternoIzquierda : ataqueIzquierda;
             if (ataqueMiraDerecha) {
-                return ataqueDerecha.getKeyFrame(tiempoAtaque, false);
+                return ataqueDerechaActual.getKeyFrame(tiempoAtaque, false);
             }
-            return ataqueIzquierda.getKeyFrame(tiempoAtaque, false);
+            return ataqueIzquierdaActual.getKeyFrame(tiempoAtaque, false);
         }
 
         if (!estaEnElSuelo) {
@@ -556,16 +662,49 @@ public class Jugador {
 
     // Cargar las animaciones de Jorge (carpeta, cantidad de imagenes, duracion de cada una).
     private void cargarTodasLasAnimaciones() {
-        boolean conLanza = lanzaComprada || tieneLanza;
-        estaticoDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_ESTATICO_LANZA_DERECHA : RUTA_ESTATICO_NORMAL_DERECHA, 12, 0.10f);
-        estaticoIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_ESTATICO_LANZA_IZQUIERDA : RUTA_ESTATICO_NORMAL_IZQUIERDA, 12, 0.10f);
-        caminarDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_CAMINAR_LANZA_DERECHA : "jugador/caminar_derecha", 10, 0.08f);
-        caminarIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_CAMINAR_LANZA_IZQUIERDA : "jugador/caminar_izquierda", 10, 0.08f);
-        saltoDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_SALTO_LANZA_DERECHA : "jugador/salto_derecha", 13, 0.10f);
-        saltoIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_SALTO_LANZA_IZQUIERDA : "jugador/salto_izquierda", 13, 0.10f);
-        ataqueDerecha = cargarAnimacionDesdeRuta(conLanza ? RUTA_ATAQUE_LANZA_DERECHA : "jugador/ataque_derecha", conLanza ? 10 : 12, conLanza ? 0.08f : 0.07f);
-        ataqueIzquierda = cargarAnimacionDesdeRuta(conLanza ? RUTA_ATAQUE_LANZA_IZQUIERDA : "jugador/ataque_izquierda", conLanza ? 10 : 12, conLanza ? 0.08f : 0.07f);
+        liberarImagenesAnimacion();
+        boolean conLanza = tieneLanza;
+        estaticoDerecha = cargarAnimacionDesdeRuta(
+            conLanza ? RUTA_ESTATICO_LANZA_DERECHA : RUTA_ESTATICO_NORMAL_DERECHA,
+            conLanza ? 18 : 12, 0.10f);
+        estaticoIzquierda = cargarAnimacionDesdeRuta(
+            conLanza ? RUTA_ESTATICO_LANZA_IZQUIERDA : RUTA_ESTATICO_NORMAL_IZQUIERDA,
+            conLanza ? 18 : 12, 0.10f);
+        dashDerecha = cargarAnimacionDesdeRuta("jugador/dash/derecha", 11, 0.04f);
+        dashIzquierda = cargarAnimacionDesdeRuta("jugador/dash/izquierda", 11, 0.04f);
+        if (conLanza) {
+            caminarDerecha = cargarAnimacionDesdeRuta(RUTA_CAMINAR_LANZA_DERECHA, 13, 0.08f);
+            caminarIzquierda = cargarAnimacionDesdeRuta(RUTA_CAMINAR_LANZA_IZQUIERDA, 13, 0.08f);
+            saltoDerecha = cargarAnimacionDesdeRuta(RUTA_SALTO_LANZA_DERECHA, 14, 0.10f);
+            saltoIzquierda = cargarAnimacionDesdeRuta(RUTA_SALTO_LANZA_IZQUIERDA, 14, 0.10f);
+            ataqueDerecha = cargarAnimacionDesdeRuta(
+                RUTA_ATAQUE_LANZA_DERECHA, FRAMES_ATAQUE_LANZA,
+                DURACION_ATAQUE / FRAMES_ATAQUE_LANZA);
+            ataqueIzquierda = cargarAnimacionDesdeRuta(
+                RUTA_ATAQUE_LANZA_IZQUIERDA, FRAMES_ATAQUE_LANZA,
+                DURACION_ATAQUE / FRAMES_ATAQUE_LANZA);
+            ataqueLanzaAlternoDerecha = cargarAnimacionDesdeRuta(
+                RUTA_ATAQUE_LANZA_ALTERNO_DERECHA, FRAMES_ATAQUE_LANZA_ALTERNO, 0.08f);
+            ataqueLanzaAlternoIzquierda = cargarAnimacionDesdeRuta(
+                RUTA_ATAQUE_LANZA_ALTERNO_IZQUIERDA, FRAMES_ATAQUE_LANZA_ALTERNO, 0.08f);
+        } else {
+            caminarDerecha = cargarAnimacionDesdeRuta("jugador/caminar_derecha", 10, 0.08f);
+            caminarIzquierda = cargarAnimacionDesdeRuta("jugador/caminar_izquierda", 10, 0.08f);
+            saltoDerecha = cargarAnimacionDesdeRuta("jugador/salto_derecha", 13, 0.10f);
+            saltoIzquierda = cargarAnimacionDesdeRuta("jugador/salto_izquierda", 13, 0.10f);
+            ataqueDerecha = cargarAnimacionDesdeRuta(RUTA_ATAQUE_ESPADA_DERECHA, 12, 0.07f);
+            ataqueIzquierda = cargarAnimacionDesdeRuta(RUTA_ATAQUE_ESPADA_IZQUIERDA, 12, 0.07f);
+            ataqueLanzaAlternoDerecha = null;
+            ataqueLanzaAlternoIzquierda = null;
+        }
         escudo = cargarAnimacion("escudo", 8, 0.12f);
+    }
+
+    private void liberarImagenesAnimacion() {
+        for (Texture imagen : imagenes) {
+            imagen.dispose();
+        }
+        imagenes.clear();
     }
 
     // Cargar una animacion desde una carpeta.
@@ -601,9 +740,7 @@ public class Jugador {
             idSonidoCaminar = -1L;
         }
         sonidoCaminar.dispose();
-        for (Texture imagen : imagenes) {
-            imagen.dispose();
-        }
+        liberarImagenesAnimacion();
         sonidoSalto.dispose();
         sonidoAtaque.dispose();
         sonidoEscudo.dispose();

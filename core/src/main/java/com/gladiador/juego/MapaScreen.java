@@ -83,9 +83,6 @@ public class MapaScreen implements Screen {
     // Se llama una sola vez al abrir el nivel: crear todo.
     @Override
     public void show() {
-        // Cada reinicio de partida vuelve a empezar con la vida completa,
-        // manteniendo el progreso del juego pero restaurando el estado del personaje.
-        Vida.restablecer();
         // Inicializa los recursos y el estado cuando LibGDX muestra este nivel.
         configurarCamara();
         fondoMapa = new Texture(Gdx.files.internal("Mapa 1/scene_animated.png"));
@@ -313,9 +310,8 @@ public class MapaScreen implements Screen {
         if (oleadasCompletadas
             && jugador.getX() >= anchoMapa - DISTANCIA_PUERTA
             && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-            Monedas.recompensarPrimerMapa();
+            Monedas.recompensarEtapa(etapaProgresion);
             game.registrarEtapaCompletada(etapaProgresion);
-            vida.curarCompleto();
             game.setScreen(new JuegoScreen(game));
             return;
         }
@@ -369,6 +365,8 @@ public class MapaScreen implements Screen {
                 float distancia = Math.abs(diferencia);
                 float separacion = Math.max(0f, (distanciaMinima - distancia) / 2f);
 
+                a.reaccionarAlChoque(-direccion);
+                b.reaccionarAlChoque(direccion);
                 a.aplicarSeparacion(-direccion * separacion);
                 b.aplicarSeparacion(direccion * separacion);
             }
@@ -383,7 +381,12 @@ public class MapaScreen implements Screen {
         int cantidadEnemigos = ENEMIGOS_POR_OLEADA[oleadaActual - 1];
         for (int i = 0; i < cantidadEnemigos; i++) {
             float x = buscarPosicionAparicion(jugadorX);
-            float velocidadBase = 80f + MathUtils.random(0f, 24f) + oleadaActual * 4f;
+            float velocidadBase;
+            if ("Zona 1".equals(nombreZona)) {
+                velocidadBase = MathUtils.random(65f, 140f) + oleadaActual * 5f;
+            } else {
+                velocidadBase = 80f + MathUtils.random(0f, 24f) + oleadaActual * 4f;
+            }
             enemigos.add(new Enemigo(x, ALTURA_SUELO, velocidadBase, seleccionarTipoEnemigo(), nombreZona));
         }
     }
@@ -510,7 +513,8 @@ public class MapaScreen implements Screen {
                 game.resetProgreso();
                 game.setScreen(new JuegoScreen(game)); // reinicia la campaña y restaura la vida
             } else if (volverSeleccionado) {
-                game.setScreen(new JuegoScreen(game)); // volver al lobby
+                game.resetProgreso();
+                game.setScreen(new MenuScreen(game)); // volver al menu principal
             }
         }
     }

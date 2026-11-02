@@ -10,8 +10,9 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 // no importa en que pantalla este Jorge.
 public class Monedas {
 
-    private static int cantidad;                   // monedas que tiene el jugador
-    private static boolean recompensaYaEntregada;  // para que el premio solo se cobre una vez
+    private static int cantidad=100;
+    private static final boolean[] etapasRecompensadas =
+        new boolean[MainClass.ETAPA_JEFE_ZONA2 + 1];
 
     private final Texture imagen;
     private final BitmapFont fuente;
@@ -22,18 +23,22 @@ public class Monedas {
         fuente = new BitmapFont(); // fuente por defecto de LibGDX, para textos simples
     }
 
-    // Al terminar el primer mapa se cobran 100 monedas, solo la primera vez.
-    public static void recompensarPrimerMapa() {
-        // La marca evita que repetir el nivel vuelva a otorgar el mismo premio.
-        if (!recompensaYaEntregada) {
-            cantidad += 100;
-            recompensaYaEntregada = true;
+    // Cada nivel normal da 50 monedas y cada jefe derrotado da 100, una sola vez.
+    public static void recompensarEtapa(int etapa) {
+        if (etapa < 0 || etapa >= etapasRecompensadas.length || etapasRecompensadas[etapa]) {
+            return;
         }
+        boolean esJefe = etapa == MainClass.ETAPA_JEFE_ZONA1
+            || etapa == MainClass.ETAPA_JEFE_ZONA2;
+        cantidad += esJefe ? 100 : 50;
+        etapasRecompensadas[etapa] = true;
     }
 
     public static void reiniciar() {
         cantidad = 0;
-        recompensaYaEntregada = false;
+        for (int etapa = 0; etapa < etapasRecompensadas.length; etapa++) {
+            etapasRecompensadas[etapa] = false;
+        }
     }
 
     public static boolean gastar(int costo) {

@@ -26,6 +26,8 @@ public class JuegoScreen implements Screen {
     // Animacion del fondo de la mazmorra (32 cuadros que se repiten).
     private static final int FRAMES_MAZMORRA = 32;
     private static final float DURACION_MAZMORRA = 0.12f;
+    private static final float DURACION_PRESENTACION_PRISION = 6f;
+    private static final float ANCHO_CARTEL_PRISION = 500f;
 
     private final MainClass game;
     private OrthographicCamera camera;
@@ -41,6 +43,7 @@ public class JuegoScreen implements Screen {
     private Monedas monedas;
     private BitmapFont fuente;          // para los textos simples
     private Music musicaLobby;
+    private float tiempoPresentacionPrision;
 
     // Estado de esta pantalla.
     private boolean puedeEntrarAlMapa;          // Jorge esta parado frente a la puerta
@@ -54,7 +57,6 @@ public class JuegoScreen implements Screen {
     // show() se llama al abrir la pantalla: aca se carga TODO.
     @Override
     public void show() {
-        Vida.restablecer();
         configurarCamara();
         cargarMazmorra();
         panelSelector = new Texture(Gdx.files.internal("menu/controles_fondo.png"));
@@ -71,6 +73,7 @@ public class JuegoScreen implements Screen {
         puedeEntrarAlMapa = false;
         hablandoConComerciante = false;
         mensajeComerciante = "";
+        tiempoPresentacionPrision = DURACION_PRESENTACION_PRISION;
     }
 
     // Camara 2D que mantiene la proporcion de la pantalla (FitViewport).
@@ -143,9 +146,10 @@ public class JuegoScreen implements Screen {
             fuente.draw(game.batch, "Mercader: Puedo curarte por 50 monedas.", 430f, 650f);
             fuente.draw(game.batch, "Pulsa R para curarte por completo.", 430f, 620f);
             if (!Jugador.tieneLanzaComprada()) {
-                fuente.draw(game.batch, "Pulsa L para comprar la lanza por 1 moneda.", 430f, 600f);
+                fuente.draw(game.batch, "Pulsa L para comprar la lanza por 100 monedas.", 430f, 600f);
             } else {
-                fuente.draw(game.batch, "Lanza comprada: equipada automáticamente.", 430f, 600f);
+                String armaEquipada = jugador.tieneLanza() ? "lanza" : "espada";
+                fuente.draw(game.batch, "Equipada: " + armaEquipada + ". Pulsa L para cambiar.", 430f, 600f);
             }
             fuente.draw(game.batch, mensajeComerciante, 430f, 570f);
             fuente.draw(game.batch, "Pulsa F para cerrar el diálogo", 430f, 540f);
@@ -160,6 +164,16 @@ public class JuegoScreen implements Screen {
                 game.batch.end();
                 return;
             }
+        }
+
+        if (tiempoPresentacionPrision > 0f) {
+            float altoCartel = ANCHO_CARTEL_PRISION
+                * cartelPrision.getHeight() / cartelPrision.getWidth();
+            game.batch.draw(cartelPrision,
+                (ANCHO - ANCHO_CARTEL_PRISION) / 2f,
+                ALTO - altoCartel - 20f,
+                ANCHO_CARTEL_PRISION, altoCartel);
+            tiempoPresentacionPrision = Math.max(0f, tiempoPresentacionPrision - delta);
         }
 
         game.batch.end();
@@ -183,15 +197,16 @@ public class JuegoScreen implements Screen {
         if (cercaDelComerciante && hablandoConComerciante
                 && Gdx.input.isKeyJustPressed(Input.Keys.L)) {
             if (Jugador.tieneLanzaComprada()) {
-                mensajeComerciante = "Ya tienes la lanza equipada.";
-            } else if (Monedas.gastar(1)) {
+                mensajeComerciante = "Has cambiado a la "
+                    + (jugador.tieneLanza() ? "lanza." : "espada.");
+            } else if (Monedas.gastar(100)) {
                 Jugador.comprarLanza();
                 if (jugador != null) {
                     jugador.setLanzaComprada(true);
                 }
                 mensajeComerciante = "Has comprado la lanza. Se equipó automáticamente.";
             } else {
-                mensajeComerciante = "Necesitas 1 moneda para comprar la lanza.";
+                mensajeComerciante = "Necesitas 100 monedas para comprar la lanza.";
             }
         }
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
