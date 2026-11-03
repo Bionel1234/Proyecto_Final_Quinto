@@ -1,13 +1,20 @@
 package com.gladiador.juego;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
+import java.awt.AlphaComposite;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.metadata.IIOMetadata;
+import javax.imageio.stream.ImageInputStream;
+
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -32,9 +39,6 @@ public class ColiseoScreen implements Screen {
     private static final float POSICION_INICIAL_JUGADOR = 180f; // donde aparece Jorge
     private static final float LIMITE_JUGADOR = JuegoScreen.ANCHO - 180f; // pared invisible del fondo
     private static final float DURACION_CARTEL_JEFE = 2.5f;    // cuanto se ve el cartel del jefe
-    private static final float DURACION_FRAME_FONDO = 0.08f;
-    private static final String RUTA_ANIMACION_FONDO = "coliseo_animacion.zip";
-
     private final MainClass game;
     private final boolean jefeZona2;
     private final ArrayList<LeonInvocado> leones = new ArrayList<>(); // leones invocados en pista
@@ -42,9 +46,22 @@ public class ColiseoScreen implements Screen {
     private OrthographicCamera camera;
     private Viewport viewport;
     private Texture fondo;
-    private byte[] datosAnimacionFondo;
-    private ZipInputStream lectorAnimacionFondo;
-    private float tiempoFrameFondo;
+    private ImageInputStream entradaFondoGif;
+    private ImageReader lectorFondoGif;
+    private Pixmap pixmapFondoGif;
+    private BufferedImage lienzoFondoGif;
+    private BufferedImage lienzoAnteriorFondoGif;
+    private int anchoFondo;
+    private int altoFondo;
+    private int cantidadFotogramasFondo;
+    private int indiceFotogramaFondo = -1;
+    private int xFotogramaAnterior;
+    private int yFotogramaAnterior;
+    private int anchoFotogramaAnterior;
+    private int altoFotogramaAnterior;
+    private String disposicionFotogramaAnterior;
+    private float tiempoFotogramaFondo;
+    private float duracionFotogramaFondo;
     private Texture pantallaGameOver;
     private Texture cartelJefe;      // cartel "jefe" que se muestra al empezar
     private Jugador jugador;
@@ -86,63 +103,6 @@ public class ColiseoScreen implements Screen {
         jefe = new BestiarioJefe(jefeZona2);
         shapeRenderer = new ShapeRenderer();
         tiempoCartelJefe = DURACION_CARTEL_JEFE;
-    }
-
-    private void cargarFondoAnimado() {
-        datosAnimacionFondo = Gdx.files.internal(RUTA_ANIMACION_FONDO).readBytes();
-        lectorAnimacionFondo = new ZipInputStream(new ByteArrayInputStream(datosAnimacionFondo));
-        cargarSiguienteFrameFondo();
-    }
-
-    private void actualizarFondoAnimado(float delta) {
-        tiempoFrameFondo += delta;
-        while (tiempoFrameFondo >= DURACION_FRAME_FONDO) {
-            tiempoFrameFondo -= DURACION_FRAME_FONDO;
-            cargarSiguienteFrameFondo();
-        }
-    }
-
-    private void cargarSiguienteFrameFondo() {
-        try {
-            ZipEntry entrada = lectorAnimacionFondo.getNextEntry();
-            if (entrada == null) {
-                lectorAnimacionFondo.close();
-                lectorAnimacionFondo = new ZipInputStream(
-                    new ByteArrayInputStream(datosAnimacionFondo));
-                entrada = lectorAnimacionFondo.getNextEntry();
-                if (entrada == null) {
-                    throw new GdxRuntimeException("La animacion del Coliseo no contiene cuadros.");
-                }
-            }
-
-            ByteArrayOutputStream bytesCuadro = new ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            int cantidadLeida;
-            while ((cantidadLeida = lectorAnimacionFondo.read(buffer)) != -1) {
-                bytesCuadro.write(buffer, 0, cantidadLeida);
-            }
-            lectorAnimacionFondo.closeEntry();
-
-            byte[] datosCuadro = bytesCuadro.toByteArray();
-            Pixmap cuadro = new Pixmap(datosCuadro, 0, datosCuadro.length);
-            try {
-                if (fondo == null) {
-                    fondo = new Texture(cuadro);
-                    fondo.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-                } else {
-                    if (cuadro.getWidth() != fondo.getWidth()
-                            || cuadro.getHeight() != fondo.getHeight()) {
-                        throw new GdxRuntimeException("Los cuadros de la animacion del Coliseo "
-                            + "no tienen el mismo tamano.");
-                    }
-                    fondo.draw(cuadro, 0, 0);
-                }
-            } finally {
-                cuadro.dispose();
-            }
-        } catch (IOException e) {
-            throw new GdxRuntimeException("No se pudo leer la animacion del Coliseo.", e);
-        }
     }
 
     // Actualiza el combate y dibuja el estado actual del Coliseo.
@@ -190,9 +150,10 @@ public class ColiseoScreen implements Screen {
 
         // Dibujar la escena: fondo, jefe, leones, Jorge y la interfaz.
         game.batch.begin();
-        float altoFondo = JuegoScreen.ALTO;
-        float anchoFondo = altoFondo * fondo.getWidth() / fondo.getHeight();
-        game.batch.draw(fondo, (JuegoScreen.ANCHO - anchoFondo) / 2f, 0f, anchoFondo, altoFondo);
+        float altoFondoEscalado = JuegoScreen.ALTO;
+        float anchoFondoEscalado = altoFondoEscalado * anchoFondo / altoFondo;
+        game.batch.draw(fondo, (JuegoScreen.ANCHO - anchoFondoEscalado) / 2f, 0f,
+            anchoFondoEscalado, altoFondoEscalado);
         jefe.dibujar(game.batch, jugador.getCentroX());
         for (LeonInvocado leon : leones) {
             leon.dibujar(game.batch);
@@ -407,15 +368,25 @@ public class ColiseoScreen implements Screen {
     public void dispose() {
         if (fondo != null) {
             fondo.dispose();
+            fondo = null;
         }
-        if (lectorAnimacionFondo != null) {
+        if (pixmapFondoGif != null) {
+            pixmapFondoGif.dispose();
+            pixmapFondoGif = null;
+        }
+        if (lectorFondoGif != null) {
+            lectorFondoGif.dispose();
+            lectorFondoGif = null;
+        }
+        if (entradaFondoGif != null) {
             try {
-                lectorAnimacionFondo.close();
-            } catch (IOException e) {
-                throw new GdxRuntimeException("No se pudo liberar la animacion del Coliseo.", e);
+                entradaFondoGif.close();
+            } catch (IOException error) {
+                throw new GdxRuntimeException("No se pudo cerrar el GIF del Coliseo.", error);
+            } finally {
+                entradaFondoGif = null;
             }
         }
-        datosAnimacionFondo = null;
         if (pantallaGameOver != null) {
             pantallaGameOver.dispose();
         }
@@ -437,5 +408,171 @@ public class ColiseoScreen implements Screen {
         if (shapeRenderer != null) {
             shapeRenderer.dispose();
         }
+    }
+
+    private void cargarFondoAnimado() {
+        Pixmap nuevoPixmap = null;
+        try {
+            Iterator<ImageReader> lectores = ImageIO.getImageReadersByFormatName("gif");
+            if (!lectores.hasNext()) {
+                throw new IOException("No hay un lector GIF disponible.");
+            }
+            lectorFondoGif = lectores.next();
+            entradaFondoGif = ImageIO.createImageInputStream(
+                Gdx.files.internal("coliseo_fondo.gif").read()
+            );
+            if (entradaFondoGif == null) {
+                throw new IOException("No se pudo abrir el GIF del Coliseo.");
+            }
+            lectorFondoGif.setInput(entradaFondoGif, false, false);
+            cantidadFotogramasFondo = lectorFondoGif.getNumImages(true);
+            if (cantidadFotogramasFondo == 0) {
+                throw new IOException("El GIF del Coliseo no contiene fotogramas.");
+            }
+
+            Node pantallaLogica = exigirNodo(
+                lectorFondoGif.getStreamMetadata().getAsTree("javax_imageio_gif_stream_1.0"),
+                "LogicalScreenDescriptor"
+            );
+            NamedNodeMap atributos = pantallaLogica.getAttributes();
+            anchoFondo = Integer.parseInt(atributos.getNamedItem("logicalScreenWidth").getNodeValue());
+            altoFondo = Integer.parseInt(atributos.getNamedItem("logicalScreenHeight").getNodeValue());
+
+            lienzoFondoGif = new BufferedImage(anchoFondo, altoFondo, BufferedImage.TYPE_INT_ARGB);
+            nuevoPixmap = new Pixmap(anchoFondo, altoFondo, Pixmap.Format.RGBA8888);
+            pixmapFondoGif = nuevoPixmap;
+            leerSiguienteFotogramaFondo();
+            fondo = new Texture(pixmapFondoGif);
+            fondo.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        } catch (IOException | RuntimeException error) {
+            if (nuevoPixmap != null) {
+                nuevoPixmap.dispose();
+                pixmapFondoGif = null;
+            }
+            if (lectorFondoGif != null) {
+                lectorFondoGif.dispose();
+                lectorFondoGif = null;
+            }
+            if (entradaFondoGif != null) {
+                try {
+                    entradaFondoGif.close();
+                } catch (IOException errorDeCierre) {
+                    error.addSuppressed(errorDeCierre);
+                }
+                entradaFondoGif = null;
+            }
+            throw new GdxRuntimeException("No se pudo cargar el GIF animado del Coliseo.", error);
+        }
+    }
+
+    private void actualizarFondoAnimado(float delta) {
+        tiempoFotogramaFondo += delta;
+        while (tiempoFotogramaFondo >= duracionFotogramaFondo) {
+            tiempoFotogramaFondo -= duracionFotogramaFondo;
+            leerSiguienteFotogramaFondo();
+            fondo.draw(pixmapFondoGif, 0, 0);
+        }
+    }
+
+    private void leerSiguienteFotogramaFondo() {
+        int siguienteIndice = (indiceFotogramaFondo + 1) % cantidadFotogramasFondo;
+        try {
+            if (siguienteIndice == 0 && indiceFotogramaFondo >= 0) {
+                lienzoFondoGif = new BufferedImage(anchoFondo, altoFondo, BufferedImage.TYPE_INT_ARGB);
+                disposicionFotogramaAnterior = null;
+                lienzoAnteriorFondoGif = null;
+            }
+
+            if (disposicionFotogramaAnterior != null) {
+                if ("restoreToBackgroundColor".equals(disposicionFotogramaAnterior)) {
+                    Graphics2D graficos = lienzoFondoGif.createGraphics();
+                    graficos.setComposite(AlphaComposite.Clear);
+                    graficos.fillRect(xFotogramaAnterior, yFotogramaAnterior,
+                        anchoFotogramaAnterior, altoFotogramaAnterior);
+                    graficos.dispose();
+                } else if ("restoreToPrevious".equals(disposicionFotogramaAnterior)
+                    && lienzoAnteriorFondoGif != null) {
+                    lienzoFondoGif = lienzoAnteriorFondoGif;
+                }
+            }
+
+            IIOMetadata metadatos = lectorFondoGif.getImageMetadata(siguienteIndice);
+            Node raiz = metadatos.getAsTree("javax_imageio_gif_image_1.0");
+            Node descriptor = exigirNodo(raiz, "ImageDescriptor");
+            NamedNodeMap atributos = descriptor.getAttributes();
+            Node control = exigirNodo(raiz, "GraphicControlExtension");
+            NamedNodeMap atributosControl = control.getAttributes();
+            int x = Integer.parseInt(atributos.getNamedItem("imageLeftPosition").getNodeValue());
+            int y = Integer.parseInt(atributos.getNamedItem("imageTopPosition").getNodeValue());
+            int ancho = Integer.parseInt(atributos.getNamedItem("imageWidth").getNodeValue());
+            int alto = Integer.parseInt(atributos.getNamedItem("imageHeight").getNodeValue());
+            String disposicion = atributosControl.getNamedItem("disposalMethod").getNodeValue();
+            float duracion = Integer.parseInt(atributosControl.getNamedItem("delayTime").getNodeValue()) / 100f;
+
+            lienzoAnteriorFondoGif = "restoreToPrevious".equals(disposicion)
+                ? copiarImagen(lienzoFondoGif) : null;
+            BufferedImage imagen = lectorFondoGif.read(siguienteIndice);
+            Graphics2D graficos = lienzoFondoGif.createGraphics();
+            graficos.setComposite(AlphaComposite.SrcOver);
+            graficos.drawImage(imagen, x, y, null);
+            graficos.dispose();
+
+            int[] pixeles = lienzoFondoGif.getRGB(0, 0, anchoFondo, altoFondo, null, 0, anchoFondo);
+            java.nio.ByteBuffer destino = pixmapFondoGif.getPixels();
+            destino.clear();
+            for (int pixel : pixeles) {
+                destino.put((byte) (pixel >>> 16));
+                destino.put((byte) (pixel >>> 8));
+                destino.put((byte) pixel);
+                destino.put((byte) (pixel >>> 24));
+            }
+            destino.flip();
+
+            indiceFotogramaFondo = siguienteIndice;
+            xFotogramaAnterior = x;
+            yFotogramaAnterior = y;
+            anchoFotogramaAnterior = ancho;
+            altoFotogramaAnterior = alto;
+            disposicionFotogramaAnterior = disposicion;
+            duracionFotogramaFondo = Math.max(0.02f, duracion);
+        } catch (IOException error) {
+            throw new GdxRuntimeException("No se pudo decodificar el fotograma " + siguienteIndice
+                + " del GIF del Coliseo.", error);
+        }
+    }
+
+    private static Node exigirNodo(Node raiz, String nombre) {
+        if (nombre.equals(raiz.getNodeName())) {
+            return raiz;
+        }
+        for (Node hijo = raiz.getFirstChild(); hijo != null; hijo = hijo.getNextSibling()) {
+            Node encontrado = buscarNodo(hijo, nombre);
+            if (encontrado != null) {
+                return encontrado;
+            }
+        }
+        throw new GdxRuntimeException("Falta el metadato GIF requerido: " + nombre);
+    }
+
+    private static Node buscarNodo(Node raiz, String nombre) {
+        if (nombre.equals(raiz.getNodeName())) {
+            return raiz;
+        }
+        for (Node hijo = raiz.getFirstChild(); hijo != null; hijo = hijo.getNextSibling()) {
+            Node encontrado = buscarNodo(hijo, nombre);
+            if (encontrado != null) {
+                return encontrado;
+            }
+        }
+        return null;
+    }
+
+    private static BufferedImage copiarImagen(BufferedImage original) {
+        BufferedImage copia = new BufferedImage(original.getWidth(), original.getHeight(),
+            BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graficos = copia.createGraphics();
+        graficos.drawImage(original, 0, 0, null);
+        graficos.dispose();
+        return copia;
     }
 }

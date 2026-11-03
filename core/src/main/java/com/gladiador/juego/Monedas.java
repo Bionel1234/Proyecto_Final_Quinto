@@ -10,7 +10,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 // no importa en que pantalla este Jorge.
 public class Monedas {
 
-    private static int cantidad=100;
+    private static int cantidad = 100;
     private static final boolean[] etapasRecompensadas =
         new boolean[MainClass.ETAPA_JEFE_ZONA2 + 1];
 
