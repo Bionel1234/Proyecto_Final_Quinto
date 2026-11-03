@@ -3,6 +3,7 @@ package com.gladiador.juego;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 
 import com.badlogic.gdx.Gdx;
@@ -49,9 +50,11 @@ public class MapaScreen implements Screen {
     private Viewport viewport;
     private Texture fondoMapa;          // fondo fijo de la Zona 1
     private Texture fondoZona2;         // fondo nuevo de la Zona 2 (o null)
+    private Texture texturaPiedra;
     private Texture pantallaGameOver;
     private Texture[] imagenesOleada;
     private ArrayList<Enemigo> enemigos;
+    private ArrayList<ProyectilPiedra> proyectiles;
     private Jugador jugador;
     private Vida vida;
     private BitmapFont fuente;
@@ -97,6 +100,7 @@ public class MapaScreen implements Screen {
         if ("Zona 2".equals(nombreZona)) {
             fondoZona2 = new Texture(Gdx.files.internal("Zona 2/fondo.png"));
             fondoZona2.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+            texturaPiedra = new Texture(Gdx.files.internal("proyectiles/piedra.png"));
         }
         imagenesOleada = new Texture[CANTIDAD_OLEADAS];
         for (int i = 0; i < CANTIDAD_OLEADAS; i++) {
@@ -105,6 +109,7 @@ public class MapaScreen implements Screen {
         jugador = new Jugador(250f, 150f);
         vida = new Vida();
         enemigos = new ArrayList<>();
+        proyectiles = new ArrayList<>();
         fuente = new BitmapFont();
         shapeRenderer = new ShapeRenderer();
         // Dos plataformas flotantes: x, y (borde de abajo), ancho, alto.
@@ -200,8 +205,23 @@ public class MapaScreen implements Screen {
                 }
             }
 
-            // 4b) El enemigo golpea: tambien tiene una ventana de impacto.
-            //     Si Jorge lo golpeo antes, el ataque del enemigo se cancelo solo.
+            // 4b) Los enemigos de Zona 2 lanzan una piedra al llegar el impacto.
+            if (enemigo.esZonaDos()) {
+                if (enemigo.impactoActivo()) {
+                    float direccion = jugador.getCentroX() >= enemigo.getCentroX() ? 1f : -1f;
+                    proyectiles.add(new ProyectilPiedra(
+                        texturaPiedra,
+                        enemigo.getCentroX() + direccion * 55f - 15f,
+                        enemigo.getY() + 85f,
+                        jugador.getCentroX(),
+                        jugador.getY() + 65f
+                    ));
+                    enemigo.resolverImpacto();
+                }
+                continue;
+            }
+
+            // 4c) Si Jorge lo golpeo antes, el ataque del enemigo se cancelo solo.
             boolean jugadorRecibiendo = enemigo.impactoActivo()
                 && enemigo.getAreaDeAtaque().overlaps(hitboxJugador)
                 && Math.abs(jugador.getY() - enemigo.getY()) <= enemigo.getAlturaAtaqueMax() + 18f;
@@ -234,6 +254,8 @@ public class MapaScreen implements Screen {
                 }
             }
         }
+
+        actualizarProyectiles(delta, hitboxJugador);
 
         // 5) Sacar de la lista a los enemigos que ya terminaron de desvanecerse.
         enemigos.removeIf(enemigo -> {
@@ -288,8 +310,14 @@ public class MapaScreen implements Screen {
         for (Enemigo enemigo : enemigos) {
             enemigo.dibujar(game.batch, scroll);
         }
+        for (ProyectilPiedra proyectil : proyectiles) {
+            proyectil.dibujar(game.batch, scroll);
+        }
         vida.dibujar(game.batch);
         fuente.draw(game.batch, nombreZona + ": Nivel " + numeroNivel, 80f, 710f);
+        if ("Zona 2".equals(nombreZona)) {
+            fuente.draw(game.batch, "Piedras: escudo con E o salta con Espacio/Arriba", 80f, 650f);
+        }
         if (oleadasCompletadas) {
             fuente.draw(game.batch, "¡Has superado las 3 oleadas!", 700f, 710f);
             if (jugador.getX() >= anchoMapa - DISTANCIA_PUERTA) {
@@ -343,6 +371,48 @@ public class MapaScreen implements Screen {
         intensidadTemblor = intensidad;
     }
 
+    private void actualizarProyectiles(float delta, Rectangle hitboxJugador) {
+        Iterator<ProyectilPiedra> iterador = proyectiles.iterator();
+        while (iterador.hasNext()) {
+            ProyectilPiedra proyectil = iterador.next();
+            proyectil.actualizar(delta);
+
+            if (proyectil.estaFueraDelMapa(anchoMapa)) {
+                iterador.remove();
+                continue;
+            }
+            if (!proyectil.getHitbox().overlaps(hitboxJugador)) {
+                continue;
+            }
+
+            iterador.remove();
+            if (jugador.esInvulnerable()) {
+                continue;
+            }
+
+            float empujeAJugador = jugador.getCentroX() >= proyectil.getCentroX() ? 1f : -1f;
+            if (jugador.bloqueaGolpeDesde(proyectil.getCentroX())) {
+                jugador.bloquearGolpe(empujeAJugador);
+                if (jugador.estaEnVentanaParry()) {
+                    activarHitstop(0.10f);
+                    activarTemblor(0.12f, 5f);
+                    tiempoTextoParry = 0.7f;
+                } else {
+                    activarHitstop(0.04f);
+                    activarTemblor(0.08f, 3f);
+                }
+            } else {
+                vida.recibirGolpe(1);
+                jugador.recibirImpacto(empujeAJugador);
+                activarHitstop(0.08f);
+                activarTemblor(0.2f, 8f);
+                if (!vida.estaVivo()) {
+                    finDelJuego = true;
+                }
+            }
+        }
+    }
+
     // Devolver el fondo fijo que corresponde a la zona.
     private Texture mirarFondoActual() {
         return fondoZona2 == null ? fondoMapa : fondoZona2;
@@ -387,6 +457,7 @@ public class MapaScreen implements Screen {
     private void iniciarOleada(float jugadorX) {
         // Vacía la ronda anterior y crea la cantidad de enemigos de esta oleada.
         enemigos.clear();
+        proyectiles.clear();
         tiempoAvisoOleada = DURACION_AVISO_OLEADA;
         int[] cantidadesPorOleada = "Zona 1".equals(nombreZona)
             ? ENEMIGOS_ZONA1_POR_OLEADA : ENEMIGOS_POR_OLEADA;
@@ -629,6 +700,9 @@ public class MapaScreen implements Screen {
         }
         if (fondoZona2 != null) {
             fondoZona2.dispose();
+        }
+        if (texturaPiedra != null) {
+            texturaPiedra.dispose();
         }
         if (pantallaGameOver != null) {
             pantallaGameOver.dispose();

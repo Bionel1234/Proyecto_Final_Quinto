@@ -56,6 +56,10 @@ public class Enemigo {
     private static final float DISTANCIA_RETROCESO = 90f;
     private static final float COOLDOWN_ATAQUE = 0.85f;      // espera tras cada ataque
     private static final float DURACION_ATAQUE = 15 * 0.07f; // 15 frames de animacion
+    private static final float DURACION_LANZAMIENTO_PIEDRA = 12 * 0.07f;
+    private static final float RANGO_LANZAMIENTO_PIEDRA = 470f;
+    private static final float ALTURA_LANZAMIENTO_PIEDRA = 320f;
+    private static final float COOLDOWN_LANZAMIENTO_PIEDRA = 2.1f;
     private static final float DURACION_DEFENSA = 1.2f;
     private static final float COOLDOWN_DEFENSA = 4.5f;
     private static final float PROBABILIDAD_DEFENSA = 0.30f;
@@ -63,12 +67,15 @@ public class Enemigo {
     private static final float DURACION_DESTELLO_BLOQUEO = 0.22f; // brillo al frenar un golpe
     // El golpe hace dano durante una ventana corta (2 frames), no en un solo instante.
     private static final float MOMENTO_IMPACTO = 0.34f;
+    private static final float MOMENTO_LANZAMIENTO_PIEDRA = 7 * 0.07f;
     private static final float VENTANA_IMPACTO = 0.18f;
     private static final float DURACION_ATURDIMIENTO = 0.35f; // al recibir un golpe
     private static final float DURACION_MUERTE = 0.50f;       // desvanecerse al morir
 
     // --- Datos del enemigo ---
     private final TipoEnemigo tipo;
+    private final boolean zonaDos;
+    private final float duracionAtaque;
     private final float velocidad;         // velocidad ya multiplicada por la del tipo
     private int vida;                      // vida actual (empieza llena)
 
@@ -127,6 +134,8 @@ public class Enemigo {
     // La "zona" cambia las imagenes; todos los enemigos pueden defenderse con una pose fija.
     public Enemigo(float x, float y, float velocidadBase, TipoEnemigo tipo, String zona) {
         this.tipo = tipo;
+        zonaDos = !"Zona 1".equalsIgnoreCase(zona);
+        duracionAtaque = zonaDos ? DURACION_LANZAMIENTO_PIEDRA : DURACION_ATAQUE;
         this.vida = tipo.vidaMaxima;
         this.velocidad = velocidadBase * tipo.multiplicador;
         this.x = x;
@@ -143,8 +152,10 @@ public class Enemigo {
             // La defensa usa un frame quieto para mantener siempre el mismo tamano.
             caminarDerecha = cargarAnimacion("Enemigo1 zona2 movimientos/caminar derecha", 11, 0.08f, true);
             caminarIzquierda = cargarAnimacion("Enemigo1 zona2 movimientos/caminar izquierda", 11, 0.08f, true);
-            atacarDerecha = cargarAnimacion("Enemigo1 zona2 movimientos/atacando derecha", 13, 0.07f, false);
-            atacarIzquierda = cargarAnimacion("Enemigo1 zona2 movimientos/atacando izquierda", 13, 0.07f, false);
+            atacarDerecha = cargarAnimacion(
+                "Enemigo1 zona2 movimientos/lanzar piedra derecha", 12, 0.07f, false);
+            atacarIzquierda = cargarAnimacion(
+                "Enemigo1 zona2 movimientos/lanzar piedra izquierda", 12, 0.07f, false);
             defenderDerecha = null;
             defenderIzquierda = null;
         }
@@ -216,11 +227,12 @@ public class Enemigo {
         // 1) Si esta atacando, la animacion sigue sola y no se puede interrumpir.
         if (atacando) {
             tiempoAnimacionAtaque += delta;
-            if (tiempoAnimacionAtaque >= DURACION_ATAQUE) {
+            if (tiempoAnimacionAtaque >= duracionAtaque) {
                 atacando = false;
                 tiempoAnimacionAtaque = 0f;
                 tiempoAnimacion = 0f;
-                cooldownAtaque = COOLDOWN_ATAQUE * tipo.multiplicador * MathUtils.random(0.8f, 1.35f);
+                float esperaBase = zonaDos ? COOLDOWN_LANZAMIENTO_PIEDRA : COOLDOWN_ATAQUE;
+                cooldownAtaque = esperaBase * tipo.multiplicador * MathUtils.random(0.8f, 1.35f);
             }
             return;
         }
@@ -249,8 +261,10 @@ public class Enemigo {
         }
 
         // 4) Si Jorge esta a su alcance, prepara y lanza el ataque.
-        if (Math.abs(distanciaVertical) <= tipo.alturaAtaque
-                && Math.abs(distanciaHorizontal) <= tipo.rangoAtaque) {
+        float rangoAtaque = zonaDos ? RANGO_LANZAMIENTO_PIEDRA : tipo.rangoAtaque;
+        float alturaAtaque = zonaDos ? ALTURA_LANZAMIENTO_PIEDRA : tipo.alturaAtaque;
+        if (Math.abs(distanciaVertical) <= alturaAtaque
+                && Math.abs(distanciaHorizontal) <= rangoAtaque) {
             if (puedeAtacar()) {
                 if (!preparandoAtaque) {
                     // Primero "carga" un tiempo random, para que no sea siempre igual.
@@ -264,7 +278,7 @@ public class Enemigo {
                     impactoResuelto = false;
                     tiempoAnimacionAtaque = 0f;
                 }
-            } else if (Math.abs(distanciaHorizontal) < DISTANCIA_RETROCESO) {
+            } else if (!zonaDos && Math.abs(distanciaHorizontal) < DISTANCIA_RETROCESO) {
                 // Si esta recargando y Jorge se le pega, retrocede un poco.
                 x -= Math.signum(distanciaHorizontal) * velocidad * 0.6f * delta;
                 limitarX();
@@ -366,11 +380,12 @@ public class Enemigo {
 
     // true durante los 2 frames en los que el golpe puede hacer dano.
     public boolean impactoActivo() {
+        float momentoImpacto = zonaDos ? MOMENTO_LANZAMIENTO_PIEDRA : MOMENTO_IMPACTO;
         return estaVivo()
             && atacando
             && !impactoResuelto
-            && tiempoAnimacionAtaque >= MOMENTO_IMPACTO
-            && tiempoAnimacionAtaque <= MOMENTO_IMPACTO + VENTANA_IMPACTO;
+            && tiempoAnimacionAtaque >= momentoImpacto
+            && tiempoAnimacionAtaque <= momentoImpacto + VENTANA_IMPACTO;
     }
 
     // Avisar que el golpe ya conecto (o fue bloqueado) para que no pegue dos veces.
@@ -386,6 +401,10 @@ public class Enemigo {
     // Altura maxima a la que puede golpear (la usa MapaScreen para verificar el salto).
     public float getAlturaAtaqueMax() {
         return tipo.alturaAtaque;
+    }
+
+    public boolean esZonaDos() {
+        return zonaDos;
     }
 
     // Jorge le pego. Devuelve true si el golpe registro (aunque el enemigo lo haya bloqueado).
