@@ -14,8 +14,8 @@ import com.badlogic.gdx.math.Rectangle;
 // El jefe del Coliseo. En la Zona 2 combina ataques de cadena, onda y salto.
 public class BestiarioJefe {
 
-    private static final int CANTIDAD_FRAMES_LATIGO = 12;   // frames de la animacion de ataque
-    private static final int CANTIDAD_FRAMES_ESTAITCO = 13; // frames de la animacion quieto
+    private static final int CANTIDAD_FRAMES_LATIGO = 12;  // frames de la animacion de ataque
+    private static final int CANTIDAD_FRAMES_ESTAITCO = 13;  // frames de la animacion quieto
     private static final int VIDA_MAXIMA = 16;
     private static final int VIDA_MAXIMA_ZONA_2 = 20;
     private static final float DURACION_FRAME_ESTAITCO = 0.10f;
@@ -243,7 +243,7 @@ public class BestiarioJefe {
             centroX += direccionEmbestida * VELOCIDAD_EMBESTIDA * delta;
             centroX = MathUtils.clamp(centroX, CENTRO_X_MINIMO, CENTRO_X_MAXIMO);
             if (centroX <= CENTRO_X_MINIMO || centroX >= CENTRO_X_MAXIMO
-                    || embestidaDerecha.isAnimationFinished(tiempoAtaque)) {
+                || embestidaDerecha.isAnimationFinished(tiempoAtaque)) {
                 finalizarAtaque();
             }
             return;
@@ -444,8 +444,8 @@ public class BestiarioJefe {
 
     public boolean ondaSaltoAlcanza(Rectangle hitbox) {
         if (!hayOndaSaltoActiva()
-                || hitbox.y >= ALTURA_PISO + 27f
-                || hitbox.y + hitbox.height <= ALTURA_PISO + 5f) {
+            || hitbox.y >= ALTURA_PISO + 27f
+            || hitbox.y + hitbox.height <= ALTURA_PISO + 5f) {
             return false;
         }
 
@@ -548,10 +548,14 @@ public class BestiarioJefe {
             medida = medidaEstatico;
         }
 
-        Medida medidaDibujo = jefeZona2 ? medidaEstatico : medida;
-        float tamano = medidaDibujo.canvas * escalaVisual;
-        float x = centroX - medidaDibujo.centroPiesX * escalaVisual;
-        float y = ALTURA_PISO - (medidaDibujo.canvas - 1f - medidaDibujo.filaPiesY) * escalaVisual;
+        Medida medidaDibujo = medida;
+        float escalaDibujo = jefeZona2
+            ? escalaVisual * medidaEstatico.altoVisible / medidaDibujo.altoVisible
+            : escalaVisual;
+        float tamano = medidaDibujo.canvas * escalaDibujo;
+        float x = centroX - medidaDibujo.centroPiesX * escalaDibujo;
+        float y = ALTURA_PISO
+            - (medidaDibujo.canvas - 1f - medidaDibujo.filaPiesY) * escalaDibujo;
 
         batch.setColor(1f, 1f, 1f, 1f);
         if (tiempoDanio > 0f && ((int) (tiempoDanio * 40f) % 2) == 0) {

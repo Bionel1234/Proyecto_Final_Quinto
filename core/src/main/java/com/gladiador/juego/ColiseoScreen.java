@@ -19,6 +19,7 @@ import org.w3c.dom.Node;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -34,13 +35,13 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 // Jorge debe vaciar la barra roja de arriba esquivando latigazos y leones.
 public class ColiseoScreen implements Screen {
 
-    private static final float PISO = 72f;                     // altura del suelo de la arena
-    private static final float POSICION_INICIAL_JUGADOR = 180f; // donde aparece Jorge
-    private static final float LIMITE_JUGADOR = JuegoScreen.ANCHO - 180f; // pared invisible del fondo
-    private static final float DURACION_CARTEL_JEFE = 2.5f;    // cuanto se ve el cartel del jefe
+    private static final float PISO = 72f;  // altura del suelo de la arena
+    private static final float POSICION_INICIAL_JUGADOR = 180f;  // donde aparece Jorge
+    private static final float LIMITE_JUGADOR = JuegoScreen.ANCHO - 180f;  // pared invisible del fondo
+    private static final float DURACION_CARTEL_JEFE = 2.5f;  // cuanto se ve el cartel del jefe
     private final MainClass game;
     private final boolean jefeZona2;
-    private final ArrayList<LeonInvocado> leones = new ArrayList<>(); // leones invocados en pista
+    private final ArrayList<LeonInvocado> leones = new ArrayList<>();  // leones invocados en pista
 
     private OrthographicCamera camera;
     private Viewport viewport;
@@ -62,7 +63,10 @@ public class ColiseoScreen implements Screen {
     private float tiempoFotogramaFondo;
     private float duracionFotogramaFondo;
     private Texture pantallaGameOver;
-    private Texture cartelJefe;      // cartel "jefe" que se muestra al empezar
+    private Texture cartelJefe;  // cartel "jefe" que se muestra al empezar
+    private Texture pantallaVictoria;
+    private Texture pantallaCreditos;
+    private Music musicaVictoria;
     private Jugador jugador;
     private Vida vida;
     private BestiarioJefe jefe;
@@ -71,11 +75,13 @@ public class ColiseoScreen implements Screen {
     // Mismos efectos de combate que en los niveles: congelamiento y temblor.
     private float tiempoHitstop;
     private float tiempoTemblor;
-    private float tiempoCartelJefe;   // cuanto falta para ocultar el cartel
+    private float tiempoCartelJefe;  // cuanto falta para ocultar el cartel
 
     // Estado del combate.
     private boolean finDelJuego;
     private boolean victoria;
+    private boolean victoriaProcesada;
+    private boolean viendoCreditos;
 
     // Recibe el controlador principal para volver al lobby o registrar la victoria.
     public ColiseoScreen(MainClass game, boolean jefeZona2) {
@@ -96,8 +102,11 @@ public class ColiseoScreen implements Screen {
         cargarFondoAnimado();
         pantallaGameOver = new Texture(Gdx.files.internal("ui/gameover.png"));
         cartelJefe = new Texture(Gdx.files.internal("ui/oleada_jefe.png"));
+        pantallaVictoria = new Texture(Gdx.files.internal("ui/victoria.png"));
+        pantallaCreditos = new Texture(Gdx.files.internal("ui/creditos.jpg"));
+        musicaVictoria = Gdx.audio.newMusic(Gdx.files.internal("sonidos/musica_victoria.mp3"));
         jugador = new Jugador(POSICION_INICIAL_JUGADOR, PISO);
-        jugador.setEscalaVisual(1.2f); // en el Coliseo se lo ve un poco mas grande
+        jugador.setEscalaVisual(1.2f);  // en el Coliseo se lo ve un poco mas grande
         vida = new Vida();
         jefe = new BestiarioJefe(jefeZona2);
         shapeRenderer = new ShapeRenderer();
@@ -109,7 +118,7 @@ public class ColiseoScreen implements Screen {
     public void render(float deltaReal) {
         actualizarFondoAnimado(deltaReal);
 
-        // Congelar el combate durante el hitstop (los efectos siguen corriendo).
+// Congelar el combate durante el hitstop (los efectos siguen corriendo).
         float delta = deltaReal;
         if (!finDelJuego && tiempoHitstop > 0f) {
             tiempoHitstop = Math.max(0f, tiempoHitstop - deltaReal);
@@ -127,13 +136,24 @@ public class ColiseoScreen implements Screen {
         }
         if (victoria) {
             int etapaGanada = jefeZona2 ? MainClass.ETAPA_JEFE_ZONA2 : MainClass.ETAPA_JEFE_ZONA1;
-            Monedas.recompensarEtapa(etapaGanada);
-            game.registrarEtapaCompletada(etapaGanada);
+            if (!victoriaProcesada) {
+                Monedas.recompensarEtapa(etapaGanada);
+                game.registrarEtapaCompletada(etapaGanada);
+                victoriaProcesada = true;
+                if (jefeZona2) {
+                    musicaVictoria.setLooping(true);
+                    musicaVictoria.play();
+                }
+            }
+            if (jefeZona2) {
+                dibujarPantallaFinal();
+                return;
+            }
             game.setScreen(new JuegoScreen(game));
             return;
         }
 
-        // Limpiar y preparar la camara con el temblor.
+// Limpiar y preparar la camara con el temblor.
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
@@ -147,7 +167,7 @@ public class ColiseoScreen implements Screen {
         camera.update();
         game.batch.setProjectionMatrix(camera.combined);
 
-        // Dibujar la escena: fondo, jefe, leones, Jorge y la interfaz.
+// Dibujar la escena: fondo, jefe, leones, Jorge y la interfaz.
         game.batch.begin();
         float altoFondoEscalado = JuegoScreen.ALTO;
         float anchoFondoEscalado = altoFondoEscalado * anchoFondo / altoFondo;
@@ -160,6 +180,7 @@ public class ColiseoScreen implements Screen {
         jugador.dibujar(game.batch, 0f);
         vida.dibujar(game.batch);
         if (tiempoCartelJefe > 0f) {
+
             // Cartel de presentacion del jefe, centrado en la pantalla.
             float ancho = 700f;
             float alto = ancho * cartelJefe.getHeight() / cartelJefe.getWidth();
@@ -175,7 +196,7 @@ public class ColiseoScreen implements Screen {
         }
         dibujarBarrasDeVida();
 
-        // ESC sirve para rendirse y volver al lobby.
+// ESC sirve para rendirse y volver al lobby.
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             game.setScreen(new JuegoScreen(game));
         }
@@ -186,22 +207,22 @@ public class ColiseoScreen implements Screen {
         jugador.actualizar(delta, PISO, LIMITE_JUGADOR, List.of());
         jefe.actualizar(delta, jugador.getCentroX());
 
-        // El jefe aviso que invoco un leon: crearlo a su lado, saliendo de la derecha.
+// El jefe aviso que invoco un leon: crearlo a su lado, saliendo de la derecha.
         if (jefe.consumirInvocacionLeon()) {
             float anchoLeon = 250f;
             float xLeon = jefe.getCentroX() - 165f - anchoLeon;
             leones.add(new LeonInvocado(xLeon, PISO));
-            tiempoTemblor = 0.12f; // la invocacion se "siente"
+            tiempoTemblor = 0.12f;  // la invocacion se "siente"
         }
 
         if (jefe.getAtaqueActual() == BestiarioJefe.Ataque.EMBESTIDA
-                && jefe.getHitbox().overlaps(jugador.getHitbox())
-                && jefe.registrarImpactoEmbestida()) {
+            && jefe.getHitbox().overlaps(jugador.getHitbox())
+            && jefe.registrarImpactoEmbestida()) {
             resolverAtaqueDelJefe(jefe.getCentroX());
             tiempoTemblor = 0.15f;
         }
 
-        // Jorge le pega al jefe: solo durante los frames activos del tajo.
+// Jorge le pega al jefe: solo durante los frames activos del tajo.
         if (jefe.estaVivo()
             && jugador.estaAtaqueActivo()
             && jugador.getAreaDeAtaque().overlaps(jefe.getHitbox())) {
@@ -211,7 +232,7 @@ public class ColiseoScreen implements Screen {
             }
         }
 
-        // Los ataques del jefe: cadena (latigo) y onda expansiva. En la Zona 2 el
+// Los ataques del jefe: cadena (latigo) y onda expansiva. En la Zona 2 el
         // enemigo usa dos tipos distintos de golpe de area.
         if (jefe.consumirImpactoLatigo()
             && jefe.getAreaLatigo(jugador.getCentroX(), jugador.getY()).overlaps(jugador.getHitbox())) {
@@ -232,7 +253,7 @@ public class ColiseoScreen implements Screen {
             tiempoTemblor = 0.22f;
         }
 
-        // Los leones corren hacia la izquierda; si tocan a Jorge, lo lastiman y desaparecen.
+// Los leones corren hacia la izquierda; si tocan a Jorge, lo lastiman y desaparecen.
         Iterator<LeonInvocado> iterador = leones.iterator();
         while (iterador.hasNext()) {
             LeonInvocado leon = iterador.next();
@@ -244,11 +265,11 @@ public class ColiseoScreen implements Screen {
             }
             if (!leon.estaActivo()) {
                 leon.dispose();
-                iterador.remove(); // salir de la lista
+                iterador.remove();  // salir de la lista
             }
         }
 
-        // ¿Termino el combate?
+// ¿Termino el combate?
         if (jefe.terminoAnimacionMuerte()) {
             victoria = true;
             finDelJuego = true;
@@ -261,17 +282,19 @@ public class ColiseoScreen implements Screen {
     // Un ataque del jefe agarro a Jorge: decidir si es golpe, bloqueo o parry.
     private void resolverAtaqueDelJefe(float origenAtaqueX) {
         if (jugador.esInvulnerable()) {
-            return; // en el tiempo de gracia no pasa nada
+            return;  // en el tiempo de gracia no pasa nada
         }
         float empuje = jugador.getCentroX() >= origenAtaqueX ? 1f : -1f;
         if (jugador.bloqueaGolpeDesde(origenAtaqueX)) {
             if (jugador.estaEnVentanaParry()) {
+
                 // PARRY: el jefe queda aturdido y pierde su ataque.
                 jefe.aturdir();
                 jugador.bloquearGolpe(empuje);
                 tiempoHitstop = 0.10f;
                 tiempoTemblor = 0.14f;
             } else {
+
                 // Bloqueo comun: retrocede pero no pierde vida.
                 jugador.bloquearGolpe(empuje);
                 tiempoHitstop = 0.035f;
@@ -279,7 +302,7 @@ public class ColiseoScreen implements Screen {
             return;
         }
 
-        // Sin defensa: un punto de vida menos y Jorge queda aturdido.
+// Sin defensa: un punto de vida menos y Jorge queda aturdido.
         vida.recibirGolpe(1);
         jugador.recibirImpacto(empuje);
         tiempoHitstop = 0.07f;
@@ -322,11 +345,11 @@ public class ColiseoScreen implements Screen {
         float alto = 24f;
         float x = (JuegoScreen.ANCHO - ancho) / 2f;
         float y = JuegoScreen.ALTO - 78f;
-        shapeRenderer.setColor(0.12f, 0.04f, 0.04f, 0.94f);                 // marco
+        shapeRenderer.setColor(0.12f, 0.04f, 0.04f, 0.94f);  // marco
         shapeRenderer.rect(x - 4f, y - 4f, ancho + 8f, alto + 8f);
-        shapeRenderer.setColor(0.35f, 0.10f, 0.08f, 1f);                    // fondo vacio
+        shapeRenderer.setColor(0.35f, 0.10f, 0.08f, 1f);  // fondo vacio
         shapeRenderer.rect(x, y, ancho, alto);
-        shapeRenderer.setColor(0.82f, 0.10f, 0.08f, 1f);                    // parte llena
+        shapeRenderer.setColor(0.82f, 0.10f, 0.08f, 1f);  // parte llena
         shapeRenderer.rect(x, y, ancho * jefe.getVida() / jefe.getVidaMaxima(), alto);
         shapeRenderer.end();
     }
@@ -335,11 +358,11 @@ public class ColiseoScreen implements Screen {
     private void dibujarGameOver() {
         shapeRenderer.setProjectionMatrix(camera.combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-        shapeRenderer.setColor(0f, 0f, 0f, 0.7f); // oscurecer la escena
+        shapeRenderer.setColor(0f, 0f, 0f, 0.7f);  // oscurecer la escena
         shapeRenderer.rect(0f, 0f, JuegoScreen.ANCHO, JuegoScreen.ALTO);
         shapeRenderer.end();
 
-        // La imagen de game over mide 1671x941 y trae dos botones dibujados:
+// La imagen de game over mide 1671x941 y trae dos botones dibujados:
         // "REINTENTAR" (pelear de nuevo) y "VOLVER AL MENU" (ir al lobby).
         float escalaX = JuegoScreen.ANCHO / 1671f;
         float escalaY = JuegoScreen.ALTO / 941f;
@@ -356,7 +379,7 @@ public class ColiseoScreen implements Screen {
         game.batch.draw(pantallaGameOver, 0f, 0f, JuegoScreen.ANCHO, JuegoScreen.ALTO);
         game.batch.end();
 
-        // ?Donde esta el mouse? Comparar con las cajas de los botones.
+// ?Donde esta el mouse? Comparar con las cajas de los botones.
         Vector3 mouse = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f);
         viewport.unproject(mouse);
         boolean reintentarSeleccionado = mouse.x >= reintentarX && mouse.x <= reintentarX + reintentarAncho
@@ -367,10 +390,10 @@ public class ColiseoScreen implements Screen {
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             if (reintentarSeleccionado) {
                 game.resetProgreso();
-                game.setScreen(new JuegoScreen(game)); // reinicia la campaña y restaura la vida
+                game.setScreen(new JuegoScreen(game));  // reinicia la campaña y restaura la vida
             } else if (volverSeleccionado) {
                 game.resetProgreso();
-                game.setScreen(new MenuScreen(game)); // volver al menu principal
+                game.setScreen(new MenuScreen(game));  // volver al menu principal
             }
         }
     }
@@ -429,6 +452,19 @@ public class ColiseoScreen implements Screen {
         if (cartelJefe != null) {
             cartelJefe.dispose();
         }
+        if (pantallaVictoria != null) {
+            pantallaVictoria.dispose();
+            pantallaVictoria = null;
+        }
+        if (pantallaCreditos != null) {
+            pantallaCreditos.dispose();
+            pantallaCreditos = null;
+        }
+        if (musicaVictoria != null) {
+            musicaVictoria.stop();
+            musicaVictoria.dispose();
+            musicaVictoria = null;
+        }
         if (jugador != null) {
             jugador.dispose();
         }
@@ -444,6 +480,51 @@ public class ColiseoScreen implements Screen {
         if (shapeRenderer != null) {
             shapeRenderer.dispose();
         }
+    }
+
+    private void dibujarPantallaFinal() {
+        Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        Gdx.gl.glViewport(
+            viewport.getScreenX(), viewport.getScreenY(),
+            viewport.getScreenWidth(), viewport.getScreenHeight()
+        );
+        camera.position.set(JuegoScreen.ANCHO / 2f, JuegoScreen.ALTO / 2f, 0f);
+        camera.update();
+        game.batch.setProjectionMatrix(camera.combined);
+        game.batch.begin();
+        game.batch.draw(viendoCreditos ? pantallaCreditos : pantallaVictoria,
+            0f, 0f, JuegoScreen.ANCHO, JuegoScreen.ALTO);
+        game.batch.end();
+
+        if (!Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
+            return;
+        }
+        Vector3 mouse = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0f);
+        viewport.unproject(mouse);
+
+        if (viendoCreditos) {
+            if (estaDentro(mouse, JuegoScreen.ANCHO * 0.39f, JuegoScreen.ALTO * 0.00f,
+                JuegoScreen.ANCHO * 0.23f, JuegoScreen.ALTO * 0.09f)) {
+                game.setScreen(new MenuScreen(game));
+            }
+            return;
+        }
+
+        float escalaX = JuegoScreen.ANCHO / 512f;
+        float escalaY = JuegoScreen.ALTO / 286f;
+        if (estaDentro(mouse, 286f * escalaX, 10f * escalaY, 112f * escalaX, 40f * escalaY)) {
+            viendoCreditos = true;
+        } else if (estaDentro(mouse, 399f * escalaX, 10f * escalaY,
+            113f * escalaX, 40f * escalaY)) {
+            game.setScreen(new MenuScreen(game));
+        }
+    }
+
+    private static boolean estaDentro(Vector3 punto, float x, float y, float ancho, float alto) {
+        return punto.x >= x && punto.x <= x + ancho
+            && punto.y >= y && punto.y <= y + alto;
     }
 
     private void cargarFondoAnimado() {

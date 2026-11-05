@@ -10,7 +10,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 // no importa en que pantalla este Jorge.
 public class Monedas {
 
-    private static int cantidad = 100;
+    private static int cantidad;
     private static final boolean[] etapasRecompensadas =
         new boolean[MainClass.ETAPA_JEFE_ZONA2 + 1];
 
@@ -20,7 +20,7 @@ public class Monedas {
     // Carga los recursos graficos y de texto necesarios para mostrar el contador.
     public Monedas() {
         imagen = new Texture(Gdx.files.internal("moneda.png"));
-        fuente = new BitmapFont(); // fuente por defecto de LibGDX, para textos simples
+        fuente = new BitmapFont();  // fuente por defecto de LibGDX, para textos simples
     }
 
     // Cada nivel normal da 50 monedas y cada jefe derrotado da 100, una sola vez.
