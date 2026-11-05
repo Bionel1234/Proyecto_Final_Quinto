@@ -56,16 +56,12 @@ public class Enemigo {
     private static final float DISTANCIA_RETROCESO = 90f;
     private static final float COOLDOWN_ATAQUE = 0.85f;      // espera tras cada ataque
     private static final float DURACION_ATAQUE = 15 * 0.07f; // 15 frames de animacion
+    private static final float DURACION_ATAQUE_ESPADA_ZONA_DOS = 13 * 0.07f;
     private static final float DURACION_LANZAMIENTO_PIEDRA = 12 * 0.07f;
     private static final float DURACION_ATAQUE_CRIATURA = 8 * 0.08f;
     private static final float RANGO_LANZAMIENTO_PIEDRA = 470f;
     private static final float ALTURA_LANZAMIENTO_PIEDRA = 320f;
     private static final float COOLDOWN_LANZAMIENTO_PIEDRA = 2.1f;
-    private static final float DURACION_DEFENSA = 1.2f;
-    private static final float COOLDOWN_DEFENSA = 4.5f;
-    private static final float PROBABILIDAD_DEFENSA = 0.30f;
-    private static final float COOLDOWN_INTENTO_DEFENSA = 2.0f;
-    private static final float DURACION_DESTELLO_BLOQUEO = 0.22f; // brillo al frenar un golpe
     // El golpe hace dano durante una ventana corta (2 frames), no en un solo instante.
     private static final float MOMENTO_IMPACTO = 0.34f;
     private static final float MOMENTO_LANZAMIENTO_PIEDRA = 7 * 0.07f;
@@ -77,6 +73,7 @@ public class Enemigo {
     // --- Datos del enemigo ---
     private final TipoEnemigo tipo;
     private final boolean zonaDos;
+    private final boolean zonaDosNivelUno;
     private final boolean criaturaAlcantarillas;
     private final float duracionAtaque;
     private final float momentoLanzamiento;
@@ -88,8 +85,8 @@ public class Enemigo {
     private final Animation<TextureRegion> caminarIzquierda;
     private final Animation<TextureRegion> atacarDerecha;
     private final Animation<TextureRegion> atacarIzquierda;
-    private final Animation<TextureRegion> defenderDerecha;
-    private final Animation<TextureRegion> defenderIzquierda;
+    private final Animation<TextureRegion> atacarEspadaDerecha;
+    private final Animation<TextureRegion> atacarEspadaIzquierda;
     // Todas las imagenes cargadas, para poder liberarlas al cerrar el nivel.
     private final ArrayList<Texture> imagenes = new ArrayList<>();
 
@@ -116,7 +113,7 @@ public class Enemigo {
     private float patrolMinX = 0f;             // borde izquierda de su zona de paseo
     private float patrolMaxX = Float.MAX_VALUE; // borde derecha de su zona de paseo
     private boolean atacando = false;
-    private boolean defendiendo = false;
+    private boolean atacandoConEspada = false;
     private boolean preparandoAtaque = false;  // esta "cargando" el tajo
     private boolean impactoResuelto = false;   // el tajo actual ya pego (o lo bloquearon)
     private float esperaAtaque = 0f;           // cuanto falta para descargar el tajo
@@ -124,7 +121,6 @@ public class Enemigo {
     private float tiempoRetrocesoChoque;
     private float direccionRetrocesoChoque;
     private float tiempoDanio = 0f;            // para parpadear en rojo al recibir golpe
-    private float tiempoBloqueo = 0f;          // destello blanco al frenar un golpe con el escudo
     private float tiempoMuerte = 0f;           // progreso de la animacion de muerte
     private float velocidadEmpujeX = 0f;       // empuje que le dan los golpes de Jorge
     private long ultimoAtaqueRecibido = -1L;   // numero del ultimo golpe que le conecto
@@ -132,9 +128,7 @@ public class Enemigo {
     // Timers de las animaciones.
     private float tiempoAnimacion = 0f;
     private float tiempoAnimacionAtaque = 0f;
-    private float tiempoDefendiendo = 0f;
     private float cooldownAtaque = 0f;
-    private float cooldownDefensa = 0f;
 
     // Crear un enemigo en (x, y) del tipo indicado, para la zona indicada.
     // La "zona" cambia las imagenes; todos los enemigos pueden defenderse con una pose fija.
@@ -146,6 +140,7 @@ public class Enemigo {
                    boolean criaturaAlcantarillas) {
         this.tipo = tipo;
         zonaDos = !"Zona 1".equalsIgnoreCase(zona);
+        zonaDosNivelUno = zonaDos && !criaturaAlcantarillas;
         this.criaturaAlcantarillas = zonaDos && criaturaAlcantarillas;
         duracionAtaque = this.criaturaAlcantarillas
             ? DURACION_ATAQUE_CRIATURA
@@ -167,15 +162,15 @@ public class Enemigo {
                 "Criatura alcantarillas/Ataque derecha", 8, 0.08f, false, true);
             atacarIzquierda = cargarAnimacion(
                 "Criatura alcantarillas/Ataque izquierda", 8, 0.08f, false, true);
-            defenderDerecha = null;
-            defenderIzquierda = null;
+            atacarEspadaDerecha = null;
+            atacarEspadaIzquierda = null;
         } else if ("Zona 1".equalsIgnoreCase(zona)) {
             caminarDerecha = cargarAnimacion("Enemigo 1 movimientos/Caminar derecha", 10, 0.08f, true);
             caminarIzquierda = cargarAnimacion("Enemigo 1 movimientos/Caminar izquierda sin fondo", 10, 0.08f, true);
             atacarDerecha = cargarAnimacion("Enemigo 1 movimientos/Atacar derecha", 15, 0.07f, false);
             atacarIzquierda = cargarAnimacion("Enemigo 1 movimientos/Atacar izquierda", 15, 0.07f, false);
-            defenderDerecha = cargarAnimacion("Enemigo 1 movimientos/Defendiendose derecha", 12, 0.10f, false);
-            defenderIzquierda = cargarAnimacion("Enemigo 1 movimientos/Defendiendose izquierda", 12, 0.10f, false);
+            atacarEspadaDerecha = null;
+            atacarEspadaIzquierda = null;
         } else {
             // La defensa usa un frame quieto para mantener siempre el mismo tamano.
             caminarDerecha = cargarAnimacion("Enemigo1 zona2 movimientos/caminar derecha", 11, 0.08f, true);
@@ -184,8 +179,10 @@ public class Enemigo {
                 "Enemigo1 zona2 movimientos/lanzar piedra derecha", 12, 0.07f, false);
             atacarIzquierda = cargarAnimacion(
                 "Enemigo1 zona2 movimientos/lanzar piedra izquierda", 12, 0.07f, false);
-            defenderDerecha = null;
-            defenderIzquierda = null;
+            atacarEspadaDerecha = cargarAnimacion(
+                "Enemigo1 zona2 movimientos/atacando derecha", 13, 0.07f, false);
+            atacarEspadaIzquierda = cargarAnimacion(
+                "Enemigo1 zona2 movimientos/atacando izquierda", 13, 0.07f, false);
         }
 
         calcularMedidasSprite();
@@ -217,13 +214,6 @@ public class Enemigo {
         if (tiempoDanio > 0f) {
             tiempoDanio = Math.max(0f, tiempoDanio - delta);
         }
-        if (tiempoBloqueo > 0f) {
-            tiempoBloqueo = Math.max(0f, tiempoBloqueo - delta);
-        }
-        if (cooldownDefensa > 0f) {
-            cooldownDefensa = Math.max(0f, cooldownDefensa - delta);
-        }
-
         // Aturdido: congelado, no puede hacer nada hasta recuperarse.
         if (tiempoAturdido > 0f) {
             tiempoAturdido = Math.max(0f, tiempoAturdido - delta);
@@ -247,17 +237,21 @@ public class Enemigo {
         float centroEnemigoX = x + ANCHO_ENEMIGO / 2f;
         float centroObjetivoX = objetivoX + 90f + desplazamientoObjetivoX;
         float distanciaHorizontal = centroObjetivoX - centroEnemigoX;
+        float distanciaJugadorHorizontal = objetivoX + 90f - centroEnemigoX;
         float distanciaVertical = objetivoY - y;
-        boolean enVision = Math.abs(distanciaHorizontal) <= RANGO_VISION;
+        boolean enVision = Math.abs(distanciaJugadorHorizontal) <= RANGO_VISION;
 
         // 1) Si esta atacando, la animacion sigue sola y no se puede interrumpir.
         if (atacando) {
             tiempoAnimacionAtaque += delta;
-            if (tiempoAnimacionAtaque >= duracionAtaque) {
+            if (tiempoAnimacionAtaque >= obtenerDuracionAtaqueActual()) {
+                boolean terminoAtaqueEspada = atacandoConEspada;
                 atacando = false;
+                atacandoConEspada = false;
                 tiempoAnimacionAtaque = 0f;
                 tiempoAnimacion = 0f;
-                float esperaBase = zonaDos ? COOLDOWN_LANZAMIENTO_PIEDRA : COOLDOWN_ATAQUE;
+                float esperaBase = zonaDos && !terminoAtaqueEspada
+                    ? COOLDOWN_LANZAMIENTO_PIEDRA : COOLDOWN_ATAQUE;
                 cooldownAtaque = esperaBase * tipo.multiplicador * MathUtils.random(0.8f, 1.35f);
             }
             return;
@@ -268,33 +262,32 @@ public class Enemigo {
             miraDerecha = distanciaHorizontal > 0f;
         }
 
-        // 2) Si esta defendiendo, espera a que termine esa animacion.
-        if (defendiendo) {
-            tiempoDefendiendo += delta;
-            if (tiempoDefendiendo >= DURACION_DEFENSA) {
-                defendiendo = false;
-                tiempoDefendiendo = 0f;
-                tiempoAnimacion = 0f;
-            }
-            return;
-        }
-
         // 3) Si no ve a Jorge, pasea de un lado a otro.
         if (!enVision) {
             preparandoAtaque = false;
+            atacandoConEspada = false;
             patrullar(delta);
             return;
         }
 
         // 4) Si Jorge esta a su alcance, prepara y lanza el ataque.
-        float rangoAtaque = zonaDos ? RANGO_LANZAMIENTO_PIEDRA : tipo.rangoAtaque;
-        float alturaAtaque = zonaDos ? ALTURA_LANZAMIENTO_PIEDRA : tipo.alturaAtaque;
+        boolean ataqueEspada = zonaDosNivelUno
+            && Math.abs(distanciaJugadorHorizontal) <= tipo.rangoAtaque;
+        if (preparandoAtaque && atacandoConEspada != ataqueEspada) {
+            atacandoConEspada = ataqueEspada;
+            esperaAtaque = MathUtils.random(tipo.esperaMin, tipo.esperaMax);
+        }
+        float rangoAtaque = zonaDos && !ataqueEspada
+            ? RANGO_LANZAMIENTO_PIEDRA : tipo.rangoAtaque;
+        float alturaAtaque = zonaDos && !ataqueEspada
+            ? ALTURA_LANZAMIENTO_PIEDRA : tipo.alturaAtaque;
         if (Math.abs(distanciaVertical) <= alturaAtaque
-                && Math.abs(distanciaHorizontal) <= rangoAtaque) {
+                && Math.abs(distanciaJugadorHorizontal) <= rangoAtaque) {
             if (puedeAtacar()) {
                 if (!preparandoAtaque) {
                     // Primero "carga" un tiempo random, para que no sea siempre igual.
                     preparandoAtaque = true;
+                    atacandoConEspada = ataqueEspada;
                     esperaAtaque = MathUtils.random(tipo.esperaMin, tipo.esperaMax);
                 }
                 esperaAtaque -= delta;
@@ -315,6 +308,7 @@ public class Enemigo {
 
         // 5) Ve a Jorge pero esta lejos: camina hacia el hasta la distancia de ataque.
         preparandoAtaque = false;
+        atacandoConEspada = false;
         float distancia = Math.abs(distanciaHorizontal);
         if (distancia > DISTANCIA_OBJETIVO) {
             float distanciaARecorrer = distancia - DISTANCIA_OBJETIVO;
@@ -385,6 +379,7 @@ public class Enemigo {
         direccionRetrocesoChoque = Math.signum(direccion);
         tiempoRetrocesoChoque = 0.22f;
         atacando = false;
+        atacandoConEspada = false;
         preparandoAtaque = false;
         tiempoAnimacionAtaque = 0f;
     }
@@ -392,7 +387,7 @@ public class Enemigo {
     // Cortar cualquier accion de ataque/defensa que estuviera haciendo.
     private void cancelarAtaque() {
         atacando = false;
-        defendiendo = false;
+        atacandoConEspada = false;
         impactoResuelto = false;
         tiempoAnimacionAtaque = 0f;
         preparandoAtaque = false;
@@ -401,7 +396,7 @@ public class Enemigo {
 
     // Puedo atacar si estoy vivo, libre y sin espera pendiente.
     public boolean puedeAtacar() {
-        return estaVivo() && !atacando && !defendiendo && cooldownAtaque <= 0f;
+        return estaVivo() && !atacando && cooldownAtaque <= 0f;
     }
 
     // true durante los 2 frames en los que el golpe puede hacer dano.
@@ -409,8 +404,8 @@ public class Enemigo {
         return estaVivo()
             && atacando
             && !impactoResuelto
-            && tiempoAnimacionAtaque >= momentoLanzamiento
-            && tiempoAnimacionAtaque <= momentoLanzamiento + VENTANA_IMPACTO;
+            && tiempoAnimacionAtaque >= obtenerMomentoImpactoActual()
+            && tiempoAnimacionAtaque <= obtenerMomentoImpactoActual() + VENTANA_IMPACTO;
     }
 
     // Avisar que el golpe ya conecto (o fue bloqueado) para que no pegue dos veces.
@@ -432,37 +427,34 @@ public class Enemigo {
         return zonaDos;
     }
 
-    // Jorge le pego. Devuelve true si el golpe registro (aunque el enemigo lo haya bloqueado).
+    public boolean esAtaqueDeLanzamientoPiedra() {
+        return zonaDos && !(zonaDosNivelUno && atacandoConEspada);
+    }
+
+    private float obtenerDuracionAtaqueActual() {
+        return zonaDosNivelUno && atacandoConEspada
+            ? DURACION_ATAQUE_ESPADA_ZONA_DOS : duracionAtaque;
+    }
+
+    private float obtenerMomentoImpactoActual() {
+        return zonaDosNivelUno && atacandoConEspada ? MOMENTO_IMPACTO : momentoLanzamiento;
+    }
+
+    // Jorge le pego. Devuelve true si el golpe registro.
     // numeroAtaque evita que UN mismo tajo haga dano en mas de un frame.
     // direccionEmpuje: 1 empuja a la derecha, -1 a la izquierda.
-    public boolean recibirGolpe(long numeroAtaque, float direccionEmpuje, float fuerzaEmpuje) {
+    public boolean recibirGolpe(long numeroAtaque, float direccionEmpuje, float fuerzaEmpuje, int dano) {
         if (!estaVivo() || numeroAtaque == ultimoAtaqueRecibido) {
             return false;
+        }
+        if (dano < 1) {
+            throw new IllegalArgumentException("El dano debe ser al menos 1.");
         }
 
         ultimoAtaqueRecibido = numeroAtaque;
 
-        // La guardia solo se intenta ocasionalmente y nunca interrumpe un ataque en curso.
-        boolean golpeDeFrente = Math.signum(direccionEmpuje) == (miraDerecha ? -1f : 1f);
-        boolean puedeIntentarDefensa = golpeDeFrente
-            && !atacando
-            && !preparandoAtaque
-            && cooldownDefensa <= 0f;
-        if (defendiendo || (puedeIntentarDefensa && MathUtils.randomBoolean(PROBABILIDAD_DEFENSA))) {
-            if (!defendiendo) {
-                defendiendo = true;
-                tiempoDefendiendo = 0f;
-                cooldownDefensa = COOLDOWN_DEFENSA;
-            }
-            tiempoBloqueo = DURACION_DESTELLO_BLOQUEO; // destello: "te lo bloquee"
-            return true; // el golpe fue bloqueado
-        }
-        if (puedeIntentarDefensa) {
-            cooldownDefensa = COOLDOWN_INTENTO_DEFENSA;
-        }
-
         // Recibe el dano.
-        vida = Math.max(0, vida - 1);
+        vida = Math.max(0, vida - dano);
         tiempoDanio = 0.25f;
         velocidadEmpujeX = direccionEmpuje * fuerzaEmpuje;
         if (estaVivo()) {
@@ -544,7 +536,6 @@ public class Enemigo {
         // - rojizo al recibir un golpe
         // - violeta cuando esta aturdido (es el momento de castigarlo)
         // - anaranjado mientras prepara el tajo (para que Jorge pueda reaccionar)
-        // - celeste mientras se protege, y blanco brillante justo cuando bloquea
         float rojo = 1f;
         float verde = 1f;
         float azul = 1f;
@@ -559,15 +550,6 @@ public class Enemigo {
         } else if (tiempoAturdido > 0f) {
             rojo = 0.8f;
             verde = 0.6f;
-        } else if (defendiendo) {
-            rojo = 0.55f;
-            verde = 0.95f;
-            azul = 1.0f;
-            if (tiempoBloqueo > 0f) {
-                rojo = 1f;
-                verde = 1f;
-                azul = 1f;
-            }
         } else if (atacando && tiempoAnimacionAtaque < momentoLanzamiento) {
             verde = 0.75f;
             azul = 0.45f;
@@ -580,19 +562,10 @@ public class Enemigo {
     // Elegir la animacion segun lo que esta haciendo y hacia donde mira.
     private TextureRegion mirarFrameActual() {
         if (atacando) {
-            if (miraDerecha) {
-                return atacarDerecha.getKeyFrame(tiempoAnimacionAtaque, false);
-            }
-            return atacarIzquierda.getKeyFrame(tiempoAnimacionAtaque, false);
-        }
-
-        if (defendiendo) {
-            if (defenderDerecha != null && defenderIzquierda != null) {
-                return miraDerecha
-                    ? defenderDerecha.getKeyFrame(tiempoDefendiendo, false)
-                    : defenderIzquierda.getKeyFrame(tiempoDefendiendo, false);
-            }
-            return miraDerecha ? caminarDerecha.getKeyFrame(0f) : caminarIzquierda.getKeyFrame(0f);
+            Animation<TextureRegion> animacion = atacandoConEspada
+                ? (miraDerecha ? atacarEspadaDerecha : atacarEspadaIzquierda)
+                : (miraDerecha ? atacarDerecha : atacarIzquierda);
+            return animacion.getKeyFrame(tiempoAnimacionAtaque, false);
         }
 
         if (miraDerecha) {

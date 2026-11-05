@@ -67,6 +67,7 @@ public class Jugador {
     private static boolean lanzaComprada = false;
     private static boolean lanzaEquipada = false;
     private boolean tieneLanza;
+    private int dano = 1;
 
     // Lista con todas las imagenes cargadas, para liberarlas al cerrar la pantalla.
     private final ArrayList<Texture> imagenes = new ArrayList<>();
@@ -532,6 +533,17 @@ public class Jugador {
 
     public float getCentroX() {
         return x + ANCHO_PERSONAJE / 2f;
+    }
+
+    public int getDano() {
+        return dano;
+    }
+
+    public void setDano(int dano) {
+        if (dano < 1) {
+            throw new IllegalArgumentException("El dano de Jorge debe ser al menos 1.");
+        }
+        this.dano = dano;
     }
 
     // true solo durante los frames en los que la espada realmente corta.

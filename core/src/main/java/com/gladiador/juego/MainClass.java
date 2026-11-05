@@ -19,7 +19,7 @@ public class MainClass extends Game {
     public static final int ETAPA_JEFE_ZONA2 = 5;
 
     // Indice de la etapa mas avanzada disponible en el selector.
-    private int etapaDesbloqueada = ETAPA_ZONA2_NIVEL2;
+    private int etapaDesbloqueada = ETAPA_JEFE_ZONA2;
 
     // Se ejecuta una sola vez, al abrir el juego.
     @Override

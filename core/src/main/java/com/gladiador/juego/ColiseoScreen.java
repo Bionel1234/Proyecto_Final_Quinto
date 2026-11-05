@@ -25,7 +25,6 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
-import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.GdxRuntimeException;
@@ -168,6 +167,7 @@ public class ColiseoScreen implements Screen {
                 (JuegoScreen.ALTO - alto) / 2f, ancho, alto);
         }
         game.batch.end();
+        dibujarOndaSalto();
 
         if (finDelJuego && !victoria) {
             dibujarGameOver();
@@ -205,7 +205,7 @@ public class ColiseoScreen implements Screen {
         if (jefe.estaVivo()
             && jugador.estaAtaqueActivo()
             && jugador.getAreaDeAtaque().overlaps(jefe.getHitbox())) {
-            if (jefe.recibirGolpe(jugador.getNumeroAtaque())) {
+            if (jefe.recibirGolpe(jugador.getNumeroAtaque(), jugador.getDano())) {
                 tiempoHitstop = 0.045f;
                 tiempoTemblor = 0.11f;
             }
@@ -225,9 +225,9 @@ public class ColiseoScreen implements Screen {
             && jefe.getAreaOndaEscape(jugador.getCentroX(), jugador.getY()).overlaps(jugador.getHitbox())) {
             resolverAtaqueDelJefe(jefe.getCentroX());
         }
-        if (jefeZona2 && jefe.consumirImpactoSaltoOnda()
-            && jefe.getAreaSaltoOnda().overlaps(jugador.getHitbox())) {
-            resolverAtaqueDelJefe(jefe.getCentroX());
+        if (jefeZona2 && jefe.ondaSaltoAlcanza(jugador.getHitbox())
+            && jefe.registrarImpactoOndaSalto()) {
+            resolverOndaSalto();
             tiempoHitstop = 0.08f;
             tiempoTemblor = 0.22f;
         }
@@ -284,6 +284,34 @@ public class ColiseoScreen implements Screen {
         jugador.recibirImpacto(empuje);
         tiempoHitstop = 0.07f;
         tiempoTemblor = 0.18f;
+    }
+
+    private void resolverOndaSalto() {
+        if (jugador.esInvulnerable()) {
+            return;
+        }
+        float empuje = jugador.getCentroX() >= jefe.getCentroX() ? 1f : -1f;
+        vida.recibirGolpe(1);
+        jugador.recibirImpacto(empuje);
+        tiempoHitstop = 0.07f;
+        tiempoTemblor = 0.18f;
+    }
+
+    private void dibujarOndaSalto() {
+        if (!jefeZona2 || !jefe.hayOndaSaltoActiva()) {
+            return;
+        }
+        float radio = jefe.getRadioOndaSalto();
+        shapeRenderer.setProjectionMatrix(camera.combined);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        shapeRenderer.setColor(1f, 0.65f, 0.18f, 0.9f);
+        shapeRenderer.ellipse(jefe.getCentroX() - radio, PISO + 8f, radio * 2f, 34f);
+        if (radio > 30f) {
+            shapeRenderer.setColor(1f, 0.85f, 0.4f, 0.55f);
+            shapeRenderer.ellipse(jefe.getCentroX() - radio + 18f, PISO + 12f,
+                (radio - 18f) * 2f, 22f);
+        }
+        shapeRenderer.end();
     }
 
     // Barra roja gigante arriba con la vida del jefe.

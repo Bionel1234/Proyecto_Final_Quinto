@@ -34,6 +34,8 @@ public class BestiarioJefe {
     private static final float DURACION_SALTO_ONDA =
         CANTIDAD_FRAMES_SALTO_ONDA * DURACION_FRAME_SALTO_ONDA;
     private static final float MOMENTO_IMPACTO_SALTO_ONDA = 0.42f;
+    private static final float DURACION_ONDA_SALTO = 0.8f;
+    private static final float RADIO_MAXIMO_ONDA_SALTO = 760f;
     private static final int CANTIDAD_FRAMES_MUERTE_ZONA_2 = 12;
     private static final float DURACION_INVOCACION = 1.4f;
     private static final int CANTIDAD_FRAMES_EMBESTIDA = 17;
@@ -71,7 +73,7 @@ public class BestiarioJefe {
         MUERTE
     }
 
-    private static final Ataque[] CICLO_ATAQUES_ZONA_2 = {
+    private static final Ataque[] ATAQUES_ZONA_2 = {
         Ataque.CADENA, Ataque.ONDA_ESCAPE, Ataque.SALTO_ONDA
     };
 
@@ -123,9 +125,11 @@ public class BestiarioJefe {
     private boolean ondaEscapePendiente;
     private boolean impactoEmbestidaResuelto;
     private boolean impactoSaltoOndaResuelto;
-    private boolean saltoOndaPendiente;
+    private boolean impactoJugadorOndaSaltoResuelto;
     private boolean miraAtaqueDerecha = true;
-    private int proximoAtaqueZona2;
+    private boolean proximoAtaqueZona2EsEmbestida;
+    private Ataque ultimoAtaqueZona2 = Ataque.NINGUNO;
+    private float tiempoOndaSalto = -1f;
 
     public BestiarioJefe() {
         this(false);
@@ -151,8 +155,8 @@ public class BestiarioJefe {
             saltoOndaIzquierda = cargarAnimacion(
                 "Jefe zona 2/Jefe zona 2 ataque salto onda expansiva izquierda",
                 CANTIDAD_FRAMES_SALTO_ONDA, DURACION_FRAME_SALTO_ONDA);
-            embestidaDerecha = null;
-            embestidaIzquierda = null;
+            embestidaDerecha = ataqueDerecha;
+            embestidaIzquierda = ataqueIzquierda;
             muerteDerecha = cargarAnimacion("Jefe zona 2/Jefe zona 2 muerte derecha",
                 CANTIDAD_FRAMES_MUERTE_ZONA_2, DURACION_FRAME_MUERTE);
             muerteIzquierda = cargarAnimacion("Jefe zona 2/Jefe zona 2 muerte izquierda",
@@ -164,7 +168,7 @@ public class BestiarioJefe {
             medidaSaltoOnda = medirConjunto(
                 "Jefe zona 2/Jefe zona 2 ataque salto onda expansiva derecha",
                 CANTIDAD_FRAMES_SALTO_ONDA, 512f);
-            medidaEmbestida = null;
+            medidaEmbestida = medidaAtaque;
             medidaMuerte = medirConjunto("Jefe zona 2/Jefe zona 2 muerte derecha",
                 CANTIDAD_FRAMES_MUERTE_ZONA_2, 512f);
         } else {
@@ -201,6 +205,12 @@ public class BestiarioJefe {
 
     public void actualizar(float delta, float jugadorX) {
         tiempoQuieto += delta;
+        if (tiempoOndaSalto >= 0f) {
+            tiempoOndaSalto += delta;
+            if (tiempoOndaSalto >= DURACION_ONDA_SALTO) {
+                tiempoOndaSalto = -1f;
+            }
+        }
         if (tiempoDanio > 0f) {
             tiempoDanio = Math.max(0f, tiempoDanio - delta);
         }
@@ -257,7 +267,8 @@ public class BestiarioJefe {
             } else if (ataqueActual == Ataque.SALTO_ONDA) {
                 if (!impactoSaltoOndaResuelto && tiempoAtaque >= MOMENTO_IMPACTO_SALTO_ONDA) {
                     impactoSaltoOndaResuelto = true;
-                    saltoOndaPendiente = true;
+                    tiempoOndaSalto = 0f;
+                    impactoJugadorOndaSaltoResuelto = false;
                 }
                 if (tiempoAtaque >= DURACION_SALTO_ONDA) {
                     finalizarAtaque();
@@ -296,8 +307,18 @@ public class BestiarioJefe {
 
     private void iniciarSiguienteAtaque(float jugadorX) {
         if (jefeZona2) {
-            ataqueActual = CICLO_ATAQUES_ZONA_2[proximoAtaqueZona2];
-            proximoAtaqueZona2 = (proximoAtaqueZona2 + 1) % CICLO_ATAQUES_ZONA_2.length;
+            if (proximoAtaqueZona2EsEmbestida) {
+                iniciarEmbestida(jugadorX);
+                proximoAtaqueZona2EsEmbestida = false;
+                return;
+            }
+            Ataque siguienteAtaque;
+            do {
+                siguienteAtaque = ATAQUES_ZONA_2[MathUtils.random(ATAQUES_ZONA_2.length - 1)];
+            } while (siguienteAtaque == ultimoAtaqueZona2);
+            ataqueActual = siguienteAtaque;
+            ultimoAtaqueZona2 = siguienteAtaque;
+            proximoAtaqueZona2EsEmbestida = true;
         } else {
             ataqueActual = proximoAtaqueEsLatigo ? Ataque.LATIGO : Ataque.LEON;
             proximoAtaqueEsLatigo = !proximoAtaqueEsLatigo;
@@ -317,7 +338,6 @@ public class BestiarioJefe {
         impactoLatigoPendiente = false;
         invocacionPendiente = false;
         ondaEscapePendiente = false;
-        saltoOndaPendiente = false;
         impactoSaltoOndaResuelto = false;
         tiempoHastaAtaque = MathUtils.random(ESPERA_ENTRE_ATAQUES_MINIMA, ESPERA_ENTRE_ATAQUES_MAXIMA);
     }
@@ -327,14 +347,6 @@ public class BestiarioJefe {
             return false;
         }
         impactoLatigoPendiente = false;
-        return true;
-    }
-
-    public boolean consumirImpactoSaltoOnda() {
-        if (!saltoOndaPendiente) {
-            return false;
-        }
-        saltoOndaPendiente = false;
         return true;
     }
 
@@ -358,20 +370,23 @@ public class BestiarioJefe {
         return true;
     }
 
-    public boolean recibirGolpe(long numeroAtaque) {
+    public boolean recibirGolpe(long numeroAtaque, int dano) {
         if (!estaVivo() || numeroAtaque == ultimoAtaqueRecibido) {
             return false;
         }
+        if (dano < 1) {
+            throw new IllegalArgumentException("El dano debe ser al menos 1.");
+        }
         ultimoAtaqueRecibido = numeroAtaque;
-        vida--;
+        vida = Math.max(0, vida - dano);
         tiempoDanio = 0.18f;
-        if (vida == 0) {
+        if (vida <= 0) {
             ataqueActual = muerteDerecha == null ? Ataque.NINGUNO : Ataque.MUERTE;
             tiempoAtaque = 0f;
             impactoLatigoPendiente = false;
             invocacionPendiente = false;
             ondaEscapePendiente = false;
-            saltoOndaPendiente = false;
+            tiempoOndaSalto = -1f;
         }
         return true;
     }
@@ -396,7 +411,7 @@ public class BestiarioJefe {
         impactoLatigoPendiente = false;
         invocacionPendiente = false;
         ondaEscapePendiente = false;
-        saltoOndaPendiente = false;
+        tiempoOndaSalto = -1f;
         ataqueActual = Ataque.NINGUNO;
         tiempoAtaque = 0f;
         tiempoHastaAtaque = 1f;
@@ -421,14 +436,48 @@ public class BestiarioJefe {
     }
 
     public Rectangle getAreaOndaEscape(float jugadorX, float jugadorY) {
-        float origenX = POSICION_CENTRO_X;
+        float origenX = centroX;
         float xMinimo = Math.min(origenX, jugadorX) - 38f;
         float ancho = Math.max(120f, Math.abs(jugadorX - origenX) + 140f);
         return new Rectangle(xMinimo, ALTURA_PISO + 20f, ancho, 150f);
     }
 
-    public Rectangle getAreaSaltoOnda() {
-        return new Rectangle(centroX - 500f, ALTURA_PISO + 5f, 1000f, 60f);
+    public boolean ondaSaltoAlcanza(Rectangle hitbox) {
+        if (!hayOndaSaltoActiva()
+                || hitbox.y >= ALTURA_PISO + 27f
+                || hitbox.y + hitbox.height <= ALTURA_PISO + 5f) {
+            return false;
+        }
+
+        float radioExterior = getRadioOndaSalto();
+        float radioInterior = Math.max(0f, radioExterior - 38f);
+        float distanciaCercana = centroX < hitbox.x
+            ? hitbox.x - centroX
+            : centroX > hitbox.x + hitbox.width ? centroX - hitbox.x - hitbox.width : 0f;
+        float distanciaLejana = Math.max(
+            Math.abs(hitbox.x - centroX),
+            Math.abs(hitbox.x + hitbox.width - centroX));
+        return distanciaCercana <= radioExterior && distanciaLejana >= radioInterior;
+    }
+
+    public boolean hayOndaSaltoActiva() {
+        return jefeZona2 && tiempoOndaSalto >= 0f;
+    }
+
+    public float getRadioOndaSalto() {
+        if (!hayOndaSaltoActiva()) {
+            return 0f;
+        }
+        return Math.min(RADIO_MAXIMO_ONDA_SALTO,
+            70f + RADIO_MAXIMO_ONDA_SALTO * tiempoOndaSalto / DURACION_ONDA_SALTO);
+    }
+
+    public boolean registrarImpactoOndaSalto() {
+        if (!hayOndaSaltoActiva() || impactoJugadorOndaSaltoResuelto) {
+            return false;
+        }
+        impactoJugadorOndaSaltoResuelto = true;
+        return true;
     }
 
     private Rectangle getAreaAtaqueGeneral(float jugadorX, float jugadorY, float margenX, float margenY) {
@@ -499,9 +548,10 @@ public class BestiarioJefe {
             medida = medidaEstatico;
         }
 
-        float tamano = medida.canvas * escalaVisual;
-        float x = centroX - medida.centroPiesX * escalaVisual;
-        float y = ALTURA_PISO - (medida.canvas - 1f - medida.filaPiesY) * escalaVisual;
+        Medida medidaDibujo = jefeZona2 ? medidaEstatico : medida;
+        float tamano = medidaDibujo.canvas * escalaVisual;
+        float x = centroX - medidaDibujo.centroPiesX * escalaVisual;
+        float y = ALTURA_PISO - (medidaDibujo.canvas - 1f - medidaDibujo.filaPiesY) * escalaVisual;
 
         batch.setColor(1f, 1f, 1f, 1f);
         if (tiempoDanio > 0f && ((int) (tiempoDanio * 40f) % 2) == 0) {

@@ -27,8 +27,9 @@ public class MapaScreen implements Screen {
     public static final int ANCHO = 1366;
     public static final int ALTO = 768;
     private static final float ANCHO_MAPA_BASE = 2089f;
+    private static final float ESCALA_FONDO_ZONA2 = 0.76f;
+    private static final float FRACCION_SUELO_ZONA2 = 0.37f;
     private static final float ALTURA_SUELO_ZONA1 = 150f;
-    private static final float ALTURA_SUELO_ZONA2 = 45f;
     private static final float DISTANCIA_PUERTA = 320f; // tan cerca hay que estar de la salida
     private static final float DISTANCIA_MINIMA_APARICION = 450f; // lejos de Jorge al aparecer
     private static final float DISTANCIA_MINIMA_ENTRE_ENEMIGOS = 230f;
@@ -45,7 +46,7 @@ public class MapaScreen implements Screen {
     private final String nombreZona;   // "Zona 1" o "Zona 2": cambia enemigos y texto
     private final int numeroNivel;
     private final int etapaProgresion;
-    private final float alturaSuelo;
+    private float alturaSuelo;
     private float anchoMapa = ANCHO_MAPA_BASE;
 
     private OrthographicCamera camera;
@@ -84,7 +85,7 @@ public class MapaScreen implements Screen {
         this.game = game;
         this.nombreZona = nombreZona;
         this.numeroNivel = numeroNivel;
-        alturaSuelo = "Zona 2".equals(nombreZona) ? ALTURA_SUELO_ZONA2 : ALTURA_SUELO_ZONA1;
+        alturaSuelo = ALTURA_SUELO_ZONA1;
         if ("Zona 1".equals(nombreZona)) {
             etapaProgresion = numeroNivel == 2
                 ? MainClass.ETAPA_ZONA1_NIVEL2 : MainClass.ETAPA_ZONA1_NIVEL1;
@@ -105,6 +106,9 @@ public class MapaScreen implements Screen {
             fondoZona2 = new Texture(Gdx.files.internal("Zona 2/fondo.png"));
             fondoZona2.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
             texturaPiedra = new Texture(Gdx.files.internal("proyectiles/piedra.png"));
+            anchoMapa = ANCHO_MAPA_BASE * ESCALA_FONDO_ZONA2;
+            float altoFondo = anchoMapa * fondoZona2.getHeight() / fondoZona2.getWidth();
+            alturaSuelo = (ALTO - altoFondo) / 2f + altoFondo * FRACCION_SUELO_ZONA2;
         }
         imagenesOleada = new Texture[CANTIDAD_OLEADAS];
         for (int i = 0; i < CANTIDAD_OLEADAS; i++) {
@@ -116,8 +120,7 @@ public class MapaScreen implements Screen {
         proyectiles = new ArrayList<>();
         fuente = new BitmapFont();
         shapeRenderer = new ShapeRenderer();
-        // Dos plataformas flotantes: x, y (borde de abajo), ancho, alto.
-        plataformas = Arrays.asList(
+        plataformas = "Zona 2".equals(nombreZona) ? List.of() : Arrays.asList(
             new Rectangle(850f, 260f, 220f, 24f),
             new Rectangle(1160f, 360f, 220f, 24f)
         );
@@ -203,14 +206,15 @@ public class MapaScreen implements Screen {
             // 4a) Jorge golpea: solo cuenta durante los frames activos del tajo.
             if (jugador.estaAtaqueActivo()
                     && jugador.getAreaDeAtaque().overlaps(enemigo.getHitbox())) {
-                if (enemigo.recibirGolpe(jugador.getNumeroAtaque(), jugador.getDireccionAtaque(), 300f)) {
+                if (enemigo.recibirGolpe(jugador.getNumeroAtaque(), jugador.getDireccionAtaque(),
+                        300f, jugador.getDano())) {
                     activarHitstop(0.06f);
                     activarTemblor(0.08f, 4f);
                 }
             }
 
-            // 4b) Los enemigos de Zona 2 lanzan una piedra al llegar el impacto.
-            if (enemigo.esZonaDos()) {
+            // 4b) A distancia, los enemigos de Zona 2 lanzan una piedra.
+            if (enemigo.esAtaqueDeLanzamientoPiedra()) {
                 if (enemigo.impactoActivo()) {
                     float direccion = jugador.getCentroX() >= enemigo.getCentroX() ? 1f : -1f;
                     proyectiles.add(new ProyectilPiedra(
@@ -225,7 +229,7 @@ public class MapaScreen implements Screen {
                 continue;
             }
 
-            // 4c) Si Jorge lo golpeo antes, el ataque del enemigo se cancelo solo.
+            // 4c) Si Jorge lo golpeo antes, el ataque cuerpo a cuerpo se cancelo solo.
             boolean jugadorRecibiendo = enemigo.impactoActivo()
                 && enemigo.getAreaDeAtaque().overlaps(hitboxJugador)
                 && Math.abs(jugador.getY() - enemigo.getY()) <= enemigo.getAlturaAtaqueMax() + 18f;
@@ -304,10 +308,13 @@ public class MapaScreen implements Screen {
         game.batch.begin();
         Texture fondoActual = mirarFondoActual();
         float altoFondo = anchoMapa * fondoActual.getHeight() / fondoActual.getWidth();
-        game.batch.draw(fondoActual, -scroll, 0f, anchoMapa, altoFondo);
+        float posicionYFondo = "Zona 2".equals(nombreZona) ? (ALTO - altoFondo) / 2f : 0f;
+        game.batch.draw(fondoActual, -scroll, posicionYFondo, anchoMapa, altoFondo);
         game.batch.end();
 
-        dibujarPlataformas(scroll);
+        if (!"Zona 2".equals(nombreZona)) {
+            dibujarPlataformas(scroll);
+        }
 
         game.batch.begin();
         jugador.dibujar(game.batch, scroll);
@@ -320,7 +327,7 @@ public class MapaScreen implements Screen {
         vida.dibujar(game.batch);
         fuente.draw(game.batch, nombreZona + ": Nivel " + numeroNivel, 80f, 710f);
         if ("Zona 2".equals(nombreZona)) {
-            fuente.draw(game.batch, "Piedras: escudo con E o salta con Espacio/Arriba", 80f, 650f);
+            fuente.draw(game.batch, "Ataques: espada cerca y piedras lejos. Bloquea con E o salta con Espacio/Arriba", 80f, 650f);
         }
         if (oleadasCompletadas) {
             fuente.draw(game.batch, "¡Has superado las 3 oleadas!", 700f, 710f);
@@ -631,7 +638,10 @@ public class MapaScreen implements Screen {
 
         game.batch.setProjectionMatrix(camera.combined);
         game.batch.begin();
-        game.batch.draw(mirarFondoActual(), 0f, 0f, ANCHO, ALTO);
+        Texture fondoActual = mirarFondoActual();
+        float altoFondo = anchoMapa * fondoActual.getHeight() / fondoActual.getWidth();
+        float posicionYFondo = "Zona 2".equals(nombreZona) ? (ALTO - altoFondo) / 2f : 0f;
+        game.batch.draw(fondoActual, 0f, posicionYFondo, anchoMapa, altoFondo);
         game.batch.end();
 
         // Oscurecer el fondo para que se lea el cartel.
