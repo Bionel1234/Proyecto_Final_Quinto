@@ -225,6 +225,12 @@ public class ColiseoScreen implements Screen {
             && jefe.getAreaOndaEscape(jugador.getCentroX(), jugador.getY()).overlaps(jugador.getHitbox())) {
             resolverAtaqueDelJefe(jefe.getCentroX());
         }
+        if (jefeZona2 && jefe.consumirImpactoSaltoOnda()
+            && jefe.getAreaSaltoOnda().overlaps(jugador.getHitbox())) {
+            resolverAtaqueDelJefe(jefe.getCentroX());
+            tiempoHitstop = 0.08f;
+            tiempoTemblor = 0.22f;
+        }
 
         // Los leones corren hacia la izquierda; si tocan a Jorge, lo lastiman y desaparecen.
         Iterator<LeonInvocado> iterador = leones.iterator();
@@ -358,9 +364,11 @@ public class ColiseoScreen implements Screen {
     public void resume() {
     }
 
-    // Libera los recursos del combate al cambiar de pantalla.
     @Override
     public void hide() {
+        if (jugador != null) {
+            jugador.detenerSonidoCaminar();
+        }
         dispose();
     }
 

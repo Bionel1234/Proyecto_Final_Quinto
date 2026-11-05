@@ -11,8 +11,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 
-// El jefe del Coliseo. En la Zona 1 usa el Bestiario; en la Zona 2 usa la version
-// con un ataque de cadena y una onda expansiva.
+// El jefe del Coliseo. En la Zona 2 combina ataques de cadena, onda y salto.
 public class BestiarioJefe {
 
     private static final int CANTIDAD_FRAMES_LATIGO = 12;   // frames de la animacion de ataque
@@ -22,8 +21,21 @@ public class BestiarioJefe {
     private static final float DURACION_FRAME_ESTAITCO = 0.10f;
     private static final float DURACION_ANIMACION_LATIGO = 1.75f;
     private static final float DURACION_FRAME_LATIGO = DURACION_ANIMACION_LATIGO / CANTIDAD_FRAMES_LATIGO;
+    private static final int CANTIDAD_FRAMES_ATAQUE_ZONA_2 = 15;
+    private static final float DURACION_FRAME_ATAQUE_ZONA_2 = 0.08f;
+    private static final float DURACION_ATAQUE_ZONA_2 =
+        CANTIDAD_FRAMES_ATAQUE_ZONA_2 * DURACION_FRAME_ATAQUE_ZONA_2;
+    private static final int CANTIDAD_FRAMES_ONDA_ZONA_2 = 14;
+    private static final float DURACION_FRAME_ONDA_ZONA_2 = 0.08f;
+    private static final float DURACION_ONDA_ESCAPE =
+        CANTIDAD_FRAMES_ONDA_ZONA_2 * DURACION_FRAME_ONDA_ZONA_2;
+    private static final int CANTIDAD_FRAMES_SALTO_ONDA = 13;
+    private static final float DURACION_FRAME_SALTO_ONDA = 0.075f;
+    private static final float DURACION_SALTO_ONDA =
+        CANTIDAD_FRAMES_SALTO_ONDA * DURACION_FRAME_SALTO_ONDA;
+    private static final float MOMENTO_IMPACTO_SALTO_ONDA = 0.42f;
+    private static final int CANTIDAD_FRAMES_MUERTE_ZONA_2 = 12;
     private static final float DURACION_INVOCACION = 1.4f;
-    private static final float DURACION_ONDA_ESCAPE = 1.15f;
     private static final int CANTIDAD_FRAMES_EMBESTIDA = 17;
     private static final int CANTIDAD_FRAMES_MUERTE = 13;
     private static final float DURACION_FRAME_EMBESTIDA = 0.055f;
@@ -54,9 +66,14 @@ public class BestiarioJefe {
         LEON,
         CADENA,
         ONDA_ESCAPE,
+        SALTO_ONDA,
         EMBESTIDA,
         MUERTE
     }
+
+    private static final Ataque[] CICLO_ATAQUES_ZONA_2 = {
+        Ataque.CADENA, Ataque.ONDA_ESCAPE, Ataque.SALTO_ONDA
+    };
 
     private static class Medida {
         float centroPiesX;
@@ -72,6 +89,8 @@ public class BestiarioJefe {
     private final Animation<TextureRegion> ataqueIzquierda;
     private final Animation<TextureRegion> ondaDerecha;
     private final Animation<TextureRegion> ondaIzquierda;
+    private final Animation<TextureRegion> saltoOndaDerecha;
+    private final Animation<TextureRegion> saltoOndaIzquierda;
     private final Animation<TextureRegion> embestidaDerecha;
     private final Animation<TextureRegion> embestidaIzquierda;
     private final Animation<TextureRegion> muerteDerecha;
@@ -79,6 +98,7 @@ public class BestiarioJefe {
     private final Medida medidaEstatico;
     private final Medida medidaAtaque;
     private final Medida medidaOnda;
+    private final Medida medidaSaltoOnda;
     private final Medida medidaEmbestida;
     private final Medida medidaMuerte;
     private final float escalaVisual;
@@ -96,13 +116,16 @@ public class BestiarioJefe {
     private boolean impactoLatigoResuelto;
     private boolean leonInvocado;
     private boolean proximoAtaqueEsLatigo = true;
-    private boolean proximoAtaqueEsCadena = true;
     private Ataque ataqueActual = Ataque.NINGUNO;
 
     private boolean impactoLatigoPendiente;
     private boolean invocacionPendiente;
     private boolean ondaEscapePendiente;
     private boolean impactoEmbestidaResuelto;
+    private boolean impactoSaltoOndaResuelto;
+    private boolean saltoOndaPendiente;
+    private boolean miraAtaqueDerecha = true;
+    private int proximoAtaqueZona2;
 
     public BestiarioJefe() {
         this(false);
@@ -114,19 +137,36 @@ public class BestiarioJefe {
             vida = VIDA_MAXIMA_ZONA_2;
             estaticoDerecha = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 derecha", 15, 0.08f);
             estaticoIzquierda = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 izquierda", 15, 0.08f);
-            ataqueDerecha = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 derecha", 15, 0.08f);
-            ataqueIzquierda = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 izquierda", 15, 0.08f);
-            ondaDerecha = cargarAnimacion("Jefe zona 2/Ataque onda expansiva jefe zona 2 derecha", 14, 0.09f);
-            ondaIzquierda = cargarAnimacion("Jefe zona 2/Ataque onda expansiva jefe zona 2 izquierda", 14, 0.09f);
+            ataqueDerecha = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 derecha",
+                CANTIDAD_FRAMES_ATAQUE_ZONA_2, DURACION_FRAME_ATAQUE_ZONA_2);
+            ataqueIzquierda = cargarAnimacion("Jefe zona 2/Ataque normal jefe zona 2 izquierda",
+                CANTIDAD_FRAMES_ATAQUE_ZONA_2, DURACION_FRAME_ATAQUE_ZONA_2);
+            ondaDerecha = cargarAnimacion("Jefe zona 2/Ataque onda expansiva jefe zona 2 derecha",
+                CANTIDAD_FRAMES_ONDA_ZONA_2, DURACION_FRAME_ONDA_ZONA_2);
+            ondaIzquierda = cargarAnimacion("Jefe zona 2/Ataque onda expansiva jefe zona 2 izquierda",
+                CANTIDAD_FRAMES_ONDA_ZONA_2, DURACION_FRAME_ONDA_ZONA_2);
+            saltoOndaDerecha = cargarAnimacion(
+                "Jefe zona 2/Jefe zona 2 ataque salto onda expansiva derecha",
+                CANTIDAD_FRAMES_SALTO_ONDA, DURACION_FRAME_SALTO_ONDA);
+            saltoOndaIzquierda = cargarAnimacion(
+                "Jefe zona 2/Jefe zona 2 ataque salto onda expansiva izquierda",
+                CANTIDAD_FRAMES_SALTO_ONDA, DURACION_FRAME_SALTO_ONDA);
             embestidaDerecha = null;
             embestidaIzquierda = null;
-            muerteDerecha = null;
-            muerteIzquierda = null;
+            muerteDerecha = cargarAnimacion("Jefe zona 2/Jefe zona 2 muerte derecha",
+                CANTIDAD_FRAMES_MUERTE_ZONA_2, DURACION_FRAME_MUERTE);
+            muerteIzquierda = cargarAnimacion("Jefe zona 2/Jefe zona 2 muerte izquierda",
+                CANTIDAD_FRAMES_MUERTE_ZONA_2, DURACION_FRAME_MUERTE);
             medidaEstatico = medirConjunto("Jefe zona 2/Ataque normal jefe zona 2 derecha", 15, 512f);
             medidaAtaque = medirConjunto("Jefe zona 2/Ataque normal jefe zona 2 derecha", 15, 512f);
-            medidaOnda = medirConjunto("Jefe zona 2/Ataque onda expansiva jefe zona 2 derecha", 14, 512f);
+            medidaOnda = medirConjunto("Jefe zona 2/Ataque onda expansiva jefe zona 2 derecha",
+                CANTIDAD_FRAMES_ONDA_ZONA_2, 512f);
+            medidaSaltoOnda = medirConjunto(
+                "Jefe zona 2/Jefe zona 2 ataque salto onda expansiva derecha",
+                CANTIDAD_FRAMES_SALTO_ONDA, 512f);
             medidaEmbestida = null;
-            medidaMuerte = null;
+            medidaMuerte = medirConjunto("Jefe zona 2/Jefe zona 2 muerte derecha",
+                CANTIDAD_FRAMES_MUERTE_ZONA_2, 512f);
         } else {
             vida = VIDA_MAXIMA;
             estaticoDerecha = cargarAnimacion("jefe1/estatico_derecha", CANTIDAD_FRAMES_ESTAITCO, DURACION_FRAME_ESTAITCO);
@@ -135,6 +175,8 @@ public class BestiarioJefe {
             ataqueIzquierda = cargarAnimacion("jefe1/ataque_izquierda", CANTIDAD_FRAMES_LATIGO, DURACION_FRAME_LATIGO);
             ondaDerecha = null;
             ondaIzquierda = null;
+            saltoOndaDerecha = null;
+            saltoOndaIzquierda = null;
             embestidaDerecha = cargarAnimacion(RUTA_EMBESTIDA_DERECHA,
                 CANTIDAD_FRAMES_EMBESTIDA, DURACION_FRAME_EMBESTIDA);
             embestidaIzquierda = cargarAnimacion(RUTA_EMBESTIDA_IZQUIERDA,
@@ -146,6 +188,7 @@ public class BestiarioJefe {
             medidaEstatico = medirConjunto("jefe1/estatico_derecha", CANTIDAD_FRAMES_ESTAITCO, 256f);
             medidaAtaque = medirConjunto("jefe1/ataque_derecha", CANTIDAD_FRAMES_LATIGO, 512f);
             medidaOnda = medidaAtaque;
+            medidaSaltoOnda = null;
             medidaEmbestida = medirConjunto(RUTA_EMBESTIDA_DERECHA, CANTIDAD_FRAMES_EMBESTIDA, 256f);
             medidaMuerte = medirConjunto(RUTA_MUERTE_DERECHA, CANTIDAD_FRAMES_MUERTE, 256f);
         }
@@ -170,6 +213,7 @@ public class BestiarioJefe {
         }
 
         if (ataqueActual == Ataque.NINGUNO) {
+            miraAtaqueDerecha = jugadorX >= centroX;
             if (!jefeZona2) {
                 tiempoHastaEmbestida -= delta;
                 if (tiempoHastaEmbestida <= 0f) {
@@ -179,7 +223,7 @@ public class BestiarioJefe {
             }
             tiempoHastaAtaque -= delta;
             if (tiempoHastaAtaque <= 0f) {
-                iniciarSiguienteAtaque();
+                iniciarSiguienteAtaque(jugadorX);
             }
             return;
         }
@@ -200,7 +244,7 @@ public class BestiarioJefe {
                     impactoLatigoResuelto = true;
                     impactoLatigoPendiente = true;
                 }
-                if (tiempoAtaque >= DURACION_ANIMACION_LATIGO) {
+                if (tiempoAtaque >= DURACION_ATAQUE_ZONA_2) {
                     finalizarAtaque();
                 }
             } else if (ataqueActual == Ataque.ONDA_ESCAPE) {
@@ -208,6 +252,14 @@ public class BestiarioJefe {
                     ondaEscapePendiente = true;
                 }
                 if (tiempoAtaque >= DURACION_ONDA_ESCAPE) {
+                    finalizarAtaque();
+                }
+            } else if (ataqueActual == Ataque.SALTO_ONDA) {
+                if (!impactoSaltoOndaResuelto && tiempoAtaque >= MOMENTO_IMPACTO_SALTO_ONDA) {
+                    impactoSaltoOndaResuelto = true;
+                    saltoOndaPendiente = true;
+                }
+                if (tiempoAtaque >= DURACION_SALTO_ONDA) {
                     finalizarAtaque();
                 }
             }
@@ -242,16 +294,18 @@ public class BestiarioJefe {
         invocacionPendiente = false;
     }
 
-    private void iniciarSiguienteAtaque() {
+    private void iniciarSiguienteAtaque(float jugadorX) {
         if (jefeZona2) {
-            ataqueActual = proximoAtaqueEsCadena ? Ataque.CADENA : Ataque.ONDA_ESCAPE;
-            proximoAtaqueEsCadena = !proximoAtaqueEsCadena;
+            ataqueActual = CICLO_ATAQUES_ZONA_2[proximoAtaqueZona2];
+            proximoAtaqueZona2 = (proximoAtaqueZona2 + 1) % CICLO_ATAQUES_ZONA_2.length;
         } else {
             ataqueActual = proximoAtaqueEsLatigo ? Ataque.LATIGO : Ataque.LEON;
             proximoAtaqueEsLatigo = !proximoAtaqueEsLatigo;
         }
+        miraAtaqueDerecha = jugadorX >= centroX;
         tiempoAtaque = 0f;
         impactoLatigoResuelto = false;
+        impactoSaltoOndaResuelto = false;
         leonInvocado = false;
     }
 
@@ -263,6 +317,8 @@ public class BestiarioJefe {
         impactoLatigoPendiente = false;
         invocacionPendiente = false;
         ondaEscapePendiente = false;
+        saltoOndaPendiente = false;
+        impactoSaltoOndaResuelto = false;
         tiempoHastaAtaque = MathUtils.random(ESPERA_ENTRE_ATAQUES_MINIMA, ESPERA_ENTRE_ATAQUES_MAXIMA);
     }
 
@@ -271,6 +327,14 @@ public class BestiarioJefe {
             return false;
         }
         impactoLatigoPendiente = false;
+        return true;
+    }
+
+    public boolean consumirImpactoSaltoOnda() {
+        if (!saltoOndaPendiente) {
+            return false;
+        }
+        saltoOndaPendiente = false;
         return true;
     }
 
@@ -307,6 +371,7 @@ public class BestiarioJefe {
             impactoLatigoPendiente = false;
             invocacionPendiente = false;
             ondaEscapePendiente = false;
+            saltoOndaPendiente = false;
         }
         return true;
     }
@@ -331,6 +396,7 @@ public class BestiarioJefe {
         impactoLatigoPendiente = false;
         invocacionPendiente = false;
         ondaEscapePendiente = false;
+        saltoOndaPendiente = false;
         ataqueActual = Ataque.NINGUNO;
         tiempoAtaque = 0f;
         tiempoHastaAtaque = 1f;
@@ -359,6 +425,10 @@ public class BestiarioJefe {
         float xMinimo = Math.min(origenX, jugadorX) - 38f;
         float ancho = Math.max(120f, Math.abs(jugadorX - origenX) + 140f);
         return new Rectangle(xMinimo, ALTURA_PISO + 20f, ancho, 150f);
+    }
+
+    public Rectangle getAreaSaltoOnda() {
+        return new Rectangle(centroX - 500f, ALTURA_PISO + 5f, 1000f, 60f);
     }
 
     private Rectangle getAreaAtaqueGeneral(float jugadorX, float jugadorY, float margenX, float margenY) {
@@ -392,7 +462,8 @@ public class BestiarioJefe {
     }
 
     public void dibujar(SpriteBatch batch, float jugadorX) {
-        boolean miraDerecha = jugadorX >= centroX;
+        boolean miraDerecha = ataqueActual == Ataque.NINGUNO
+            ? jugadorX >= centroX : miraAtaqueDerecha;
         TextureRegion frame;
         Medida medida;
 
@@ -411,6 +482,11 @@ public class BestiarioJefe {
                 ? ondaDerecha.getKeyFrame(tiempoAtaque, false)
                 : ondaIzquierda.getKeyFrame(tiempoAtaque, false);
             medida = medidaOnda;
+        } else if (ataqueActual == Ataque.SALTO_ONDA) {
+            frame = miraDerecha
+                ? saltoOndaDerecha.getKeyFrame(tiempoAtaque, false)
+                : saltoOndaIzquierda.getKeyFrame(tiempoAtaque, false);
+            medida = medidaSaltoOnda;
         } else if (ataqueActual == Ataque.CADENA || ataqueActual == Ataque.LATIGO || ataqueActual == Ataque.LEON) {
             frame = miraDerecha
                 ? ataqueDerecha.getKeyFrame(tiempoAtaque, false)
@@ -447,36 +523,47 @@ public class BestiarioJefe {
     }
 
     private Medida medirConjunto(String ruta, int cantidad, float canvas) {
-        int minX = Integer.MAX_VALUE;
-        int minY = Integer.MAX_VALUE;
-        int maxX = -1;
-        int maxY = -1;
+        float minX = Float.MAX_VALUE;
+        float minY = Float.MAX_VALUE;
+        float maxX = -1f;
+        float maxY = -1f;
 
         for (int indice = 0; indice < cantidad; indice++) {
             Pixmap pixmap = new Pixmap(Gdx.files.internal(String.format("%s/%02d.png", ruta, indice + 1)));
+            float escalaLienzo = canvas / pixmap.getWidth();
             for (int pixelY = 0; pixelY < pixmap.getHeight(); pixelY++) {
                 for (int pixelX = 0; pixelX < pixmap.getWidth(); pixelX++) {
                     if ((pixmap.getPixel(pixelX, pixelY) & 0xff) != 0) {
-                        minX = Math.min(minX, pixelX);
-                        minY = Math.min(minY, pixelY);
-                        maxX = Math.max(maxX, pixelX);
-                        maxY = Math.max(maxY, pixelY);
+                        float pixelMinX = (float) Math.floor(pixelX * escalaLienzo);
+                        float pixelMinY = (float) Math.floor(pixelY * escalaLienzo);
+                        float pixelMaxX = (float) Math.ceil((pixelX + 1f) * escalaLienzo) - 1f;
+                        float pixelMaxY = (float) Math.ceil((pixelY + 1f) * escalaLienzo) - 1f;
+                        minX = Math.min(minX, pixelMinX);
+                        minY = Math.min(minY, pixelMinY);
+                        maxX = Math.max(maxX, pixelMaxX);
+                        maxY = Math.max(maxY, pixelMaxY);
                     }
                 }
             }
             pixmap.dispose();
         }
 
-        int banda = Math.max(1, Math.round((maxY - minY + 1) * FRACCION_BANDA_PIES));
-        int piesMinX = Integer.MAX_VALUE;
-        int piesMaxX = -1;
+        float banda = Math.max(1f, (maxY - minY + 1f) * FRACCION_BANDA_PIES);
+        float piesMinX = Float.MAX_VALUE;
+        float piesMaxX = -1f;
         for (int indice = 0; indice < cantidad; indice++) {
             Pixmap pixmap = new Pixmap(Gdx.files.internal(String.format("%s/%02d.png", ruta, indice + 1)));
-            for (int pixelY = maxY - banda; pixelY <= maxY; pixelY++) {
+            float escalaLienzo = canvas / pixmap.getWidth();
+            for (int pixelY = 0; pixelY < pixmap.getHeight(); pixelY++) {
                 for (int pixelX = 0; pixelX < pixmap.getWidth(); pixelX++) {
                     if ((pixmap.getPixel(pixelX, pixelY) & 0xff) != 0) {
-                        piesMinX = Math.min(piesMinX, pixelX);
-                        piesMaxX = Math.max(piesMaxX, pixelX);
+                        float pixelMaxY = (float) Math.ceil((pixelY + 1f) * escalaLienzo) - 1f;
+                        if (pixelMaxY >= maxY - banda) {
+                            float pixelMinX = (float) Math.floor(pixelX * escalaLienzo);
+                            float pixelMaxX = (float) Math.ceil((pixelX + 1f) * escalaLienzo) - 1f;
+                            piesMinX = Math.min(piesMinX, pixelMinX);
+                            piesMaxX = Math.max(piesMaxX, pixelMaxX);
+                        }
                     }
                 }
             }

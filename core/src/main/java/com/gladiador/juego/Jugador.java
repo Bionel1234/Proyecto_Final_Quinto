@@ -251,7 +251,13 @@ public class Jugador {
             && Math.abs(velocidadX) > 1f;
         if (caminando && idSonidoCaminar < 0L) {
             idSonidoCaminar = sonidoCaminar.loop(0.22f);
-        } else if (!caminando && idSonidoCaminar >= 0L) {
+        } else if (!caminando) {
+            detenerSonidoCaminar();
+        }
+    }
+
+    public void detenerSonidoCaminar() {
+        if (idSonidoCaminar >= 0L) {
             sonidoCaminar.stop(idSonidoCaminar);
             idSonidoCaminar = -1L;
         }
@@ -473,6 +479,7 @@ public class Jugador {
 
     // Jorge recibe un golpe sin defensa. direccionEmpuje: 1 = lo empuja a la derecha, -1 a la izquierda.
     public void recibirImpacto(float direccionEmpuje) {
+        detenerSonidoCaminar();
         tiempoInvulnerable = DURACION_INVULNERABLE;
         tiempoAturdido = DURACION_ATURDIMIENTO;
         velocidadEmpujeX = direccionEmpuje * EMPUJE_AL_RECIBIR_DANIO;
@@ -735,10 +742,7 @@ public class Jugador {
 
     // Liberar todas las imagenes y sonidos cuando se cierra la pantalla.
     public void dispose() {
-        if (idSonidoCaminar >= 0L) {
-            sonidoCaminar.stop(idSonidoCaminar);
-            idSonidoCaminar = -1L;
-        }
+        detenerSonidoCaminar();
         sonidoCaminar.dispose();
         liberarImagenesAnimacion();
         sonidoSalto.dispose();

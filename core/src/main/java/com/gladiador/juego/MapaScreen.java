@@ -27,7 +27,8 @@ public class MapaScreen implements Screen {
     public static final int ANCHO = 1366;
     public static final int ALTO = 768;
     private static final float ANCHO_MAPA_BASE = 2089f;
-    private static final float ALTURA_SUELO = 150f;   // altura donde todos pisan
+    private static final float ALTURA_SUELO_ZONA1 = 150f;
+    private static final float ALTURA_SUELO_ZONA2 = 45f;
     private static final float DISTANCIA_PUERTA = 320f; // tan cerca hay que estar de la salida
     private static final float DISTANCIA_MINIMA_APARICION = 450f; // lejos de Jorge al aparecer
     private static final float DISTANCIA_MINIMA_ENTRE_ENEMIGOS = 230f;
@@ -44,6 +45,7 @@ public class MapaScreen implements Screen {
     private final String nombreZona;   // "Zona 1" o "Zona 2": cambia enemigos y texto
     private final int numeroNivel;
     private final int etapaProgresion;
+    private final float alturaSuelo;
     private float anchoMapa = ANCHO_MAPA_BASE;
 
     private OrthographicCamera camera;
@@ -82,11 +84,13 @@ public class MapaScreen implements Screen {
         this.game = game;
         this.nombreZona = nombreZona;
         this.numeroNivel = numeroNivel;
+        alturaSuelo = "Zona 2".equals(nombreZona) ? ALTURA_SUELO_ZONA2 : ALTURA_SUELO_ZONA1;
         if ("Zona 1".equals(nombreZona)) {
             etapaProgresion = numeroNivel == 2
                 ? MainClass.ETAPA_ZONA1_NIVEL2 : MainClass.ETAPA_ZONA1_NIVEL1;
         } else {
-            etapaProgresion = MainClass.ETAPA_ZONA2;
+            etapaProgresion = numeroNivel == 2
+                ? MainClass.ETAPA_ZONA2_NIVEL2 : MainClass.ETAPA_ZONA2;
         }
     }
 
@@ -106,7 +110,7 @@ public class MapaScreen implements Screen {
         for (int i = 0; i < CANTIDAD_OLEADAS; i++) {
             imagenesOleada[i] = new Texture(Gdx.files.internal(IMAGENES_OLEADA[i]));
         }
-        jugador = new Jugador(250f, 150f);
+        jugador = new Jugador(250f, alturaSuelo);
         vida = new Vida();
         enemigos = new ArrayList<>();
         proyectiles = new ArrayList<>();
@@ -161,7 +165,7 @@ public class MapaScreen implements Screen {
         actualizarRefuerzosZona1(delta, jugador.getX());
 
         // 1) Jorge se mueve, salta y puede caer sobre las plataformas.
-        jugador.actualizar(delta, ALTURA_SUELO, anchoMapa - 220f, plataformas);
+        jugador.actualizar(delta, alturaSuelo, anchoMapa - 220f, plataformas);
 
         // 2) La camara sigue a Jorge: el fondo se desplaza ("scroll") con el.
         float scroll = Math.min(Math.max(0f, jugador.getX() - 180f), anchoMapa - ANCHO);
@@ -493,7 +497,9 @@ public class MapaScreen implements Screen {
             float velocidadBase = "Zona 1".equals(nombreZona)
                 ? obtenerVelocidadBaseZona1(tipo)
                 : 80f + MathUtils.random(0f, 24f) + oleadaActual * 4f;
-            enemigos.add(new Enemigo(x, ALTURA_SUELO, velocidadBase, tipo, nombreZona));
+            boolean criaturaAlcantarillas = "Zona 2".equals(nombreZona) && numeroNivel == 2;
+            enemigos.add(new Enemigo(
+                x, alturaSuelo, velocidadBase, tipo, nombreZona, criaturaAlcantarillas));
     }
 
     // Elegir el tipo al azar, con mas probabilidad de tipos duros en las oleadas avanzadas.
@@ -690,6 +696,9 @@ public class MapaScreen implements Screen {
     // Esta pantalla no mantiene musica propia; al ocultarse no hace nada adicional.
     @Override
     public void hide() {
+        if (jugador != null) {
+            jugador.detenerSonidoCaminar();
+        }
     }
 
     @Override

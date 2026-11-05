@@ -57,6 +57,7 @@ public class Enemigo {
     private static final float COOLDOWN_ATAQUE = 0.85f;      // espera tras cada ataque
     private static final float DURACION_ATAQUE = 15 * 0.07f; // 15 frames de animacion
     private static final float DURACION_LANZAMIENTO_PIEDRA = 12 * 0.07f;
+    private static final float DURACION_ATAQUE_CRIATURA = 8 * 0.08f;
     private static final float RANGO_LANZAMIENTO_PIEDRA = 470f;
     private static final float ALTURA_LANZAMIENTO_PIEDRA = 320f;
     private static final float COOLDOWN_LANZAMIENTO_PIEDRA = 2.1f;
@@ -68,6 +69,7 @@ public class Enemigo {
     // El golpe hace dano durante una ventana corta (2 frames), no en un solo instante.
     private static final float MOMENTO_IMPACTO = 0.34f;
     private static final float MOMENTO_LANZAMIENTO_PIEDRA = 7 * 0.07f;
+    private static final float MOMENTO_ROCA_CRIATURA = 4 * 0.08f;
     private static final float VENTANA_IMPACTO = 0.18f;
     private static final float DURACION_ATURDIMIENTO = 0.35f; // al recibir un golpe
     private static final float DURACION_MUERTE = 0.50f;       // desvanecerse al morir
@@ -75,7 +77,9 @@ public class Enemigo {
     // --- Datos del enemigo ---
     private final TipoEnemigo tipo;
     private final boolean zonaDos;
+    private final boolean criaturaAlcantarillas;
     private final float duracionAtaque;
+    private final float momentoLanzamiento;
     private final float velocidad;         // velocidad ya multiplicada por la del tipo
     private int vida;                      // vida actual (empieza llena)
 
@@ -97,9 +101,11 @@ public class Enemigo {
     private int unionMinY = Integer.MAX_VALUE;
     private int unionMaxX = -1;
     private int unionMaxY = -1;
+    private int ataqueUnionMinX = Integer.MAX_VALUE;
+    private int ataqueUnionMaxX = -1;
+    private int ataqueUnionMaxY = -1;
     private float escalaSprite;    // tamano fijo del dibujo en pantalla
     private float centroVisibleX;  // centro horizontal fijo del dibujo
-    private float margenInferior;  // separacion fija entre el dibujo y el piso
 
     private float x;
     private float y;
@@ -133,15 +139,37 @@ public class Enemigo {
     // Crear un enemigo en (x, y) del tipo indicado, para la zona indicada.
     // La "zona" cambia las imagenes; todos los enemigos pueden defenderse con una pose fija.
     public Enemigo(float x, float y, float velocidadBase, TipoEnemigo tipo, String zona) {
+        this(x, y, velocidadBase, tipo, zona, false);
+    }
+
+    public Enemigo(float x, float y, float velocidadBase, TipoEnemigo tipo, String zona,
+                   boolean criaturaAlcantarillas) {
         this.tipo = tipo;
         zonaDos = !"Zona 1".equalsIgnoreCase(zona);
-        duracionAtaque = zonaDos ? DURACION_LANZAMIENTO_PIEDRA : DURACION_ATAQUE;
+        this.criaturaAlcantarillas = zonaDos && criaturaAlcantarillas;
+        duracionAtaque = this.criaturaAlcantarillas
+            ? DURACION_ATAQUE_CRIATURA
+            : zonaDos ? DURACION_LANZAMIENTO_PIEDRA : DURACION_ATAQUE;
+        momentoLanzamiento = this.criaturaAlcantarillas
+            ? MOMENTO_ROCA_CRIATURA
+            : zonaDos ? MOMENTO_LANZAMIENTO_PIEDRA : MOMENTO_IMPACTO;
         this.vida = tipo.vidaMaxima;
         this.velocidad = velocidadBase * tipo.multiplicador;
         this.x = x;
         this.y = y;
 
-        if ("Zona 1".equalsIgnoreCase(zona)) {
+        if (this.criaturaAlcantarillas) {
+            caminarDerecha = cargarAnimacion(
+                "Criatura alcantarillas/Caminar derecha", 13, 0.08f, true);
+            caminarIzquierda = cargarAnimacion(
+                "Criatura alcantarillas/Caminar izquierda", 13, 0.08f, true);
+            atacarDerecha = cargarAnimacion(
+                "Criatura alcantarillas/Ataque derecha", 8, 0.08f, false, true);
+            atacarIzquierda = cargarAnimacion(
+                "Criatura alcantarillas/Ataque izquierda", 8, 0.08f, false, true);
+            defenderDerecha = null;
+            defenderIzquierda = null;
+        } else if ("Zona 1".equalsIgnoreCase(zona)) {
             caminarDerecha = cargarAnimacion("Enemigo 1 movimientos/Caminar derecha", 10, 0.08f, true);
             caminarIzquierda = cargarAnimacion("Enemigo 1 movimientos/Caminar izquierda sin fondo", 10, 0.08f, true);
             atacarDerecha = cargarAnimacion("Enemigo 1 movimientos/Atacar derecha", 15, 0.07f, false);
@@ -169,8 +197,6 @@ public class Enemigo {
         float altoUnion = unionMaxY - unionMinY + 1f;
         escalaSprite = ALTO_VISIBLE_ENEMIGO / altoUnion;
         centroVisibleX = (unionMinX + unionMaxX + 1f) / 2f;
-        // El borde de abajo del dibujo (unionMaxY) debe quedar apoyado en el piso (y).
-        margenInferior = (256f - unionMaxY - 1f) * escalaSprite;
     }
 
     // Este metodo se llama una vez por frame desde MapaScreen.
@@ -380,12 +406,11 @@ public class Enemigo {
 
     // true durante los 2 frames en los que el golpe puede hacer dano.
     public boolean impactoActivo() {
-        float momentoImpacto = zonaDos ? MOMENTO_LANZAMIENTO_PIEDRA : MOMENTO_IMPACTO;
         return estaVivo()
             && atacando
             && !impactoResuelto
-            && tiempoAnimacionAtaque >= momentoImpacto
-            && tiempoAnimacionAtaque <= momentoImpacto + VENTANA_IMPACTO;
+            && tiempoAnimacionAtaque >= momentoLanzamiento
+            && tiempoAnimacionAtaque <= momentoLanzamiento + VENTANA_IMPACTO;
     }
 
     // Avisar que el golpe ya conecto (o fue bloqueado) para que no pegue dos veces.
@@ -504,9 +529,15 @@ public class Enemigo {
 
         // El tamano y la posicion son FIJOS (se calcularon al cargar las imagenes),
         // para que el enemigo no cambie de altura ni "salte" entre frames.
-        float posicionX = x - desplazamientoX + ANCHO_ENEMIGO / 2f - centroVisibleX * escalaSprite;
-        float posicionY = y - margenInferior;
-        float tamanoMarco = 256f * escalaSprite;
+        boolean ataqueCriatura = criaturaAlcantarillas && atacando;
+        float centroVisible = ataqueCriatura
+            ? (ataqueUnionMinX + ataqueUnionMaxX + 1f) / 2f
+            : centroVisibleX;
+        float maxVisibleY = ataqueCriatura ? ataqueUnionMaxY : unionMaxY;
+        float posicionX = x - desplazamientoX + ANCHO_ENEMIGO / 2f - centroVisible * escalaSprite;
+        float posicionY = y - (frameActual.getRegionHeight() - maxVisibleY - 1f) * escalaSprite;
+        float tamanoAncho = frameActual.getRegionWidth() * escalaSprite;
+        float tamanoAlto = frameActual.getRegionHeight() * escalaSprite;
 
         // Colores de aviso:
         // - al morir se pone oscuro y transparente
@@ -537,12 +568,12 @@ public class Enemigo {
                 verde = 1f;
                 azul = 1f;
             }
-        } else if (atacando && tiempoAnimacionAtaque < MOMENTO_IMPACTO) {
+        } else if (atacando && tiempoAnimacionAtaque < momentoLanzamiento) {
             verde = 0.75f;
             azul = 0.45f;
         }
         batch.setColor(rojo, verde, azul, alfa);
-        batch.draw(frameActual, posicionX, posicionY, tamanoMarco, tamanoMarco);
+        batch.draw(frameActual, posicionX, posicionY, tamanoAncho, tamanoAlto);
         batch.setColor(1f, 1f, 1f, 1f); // dejar el color como estaba
     }
 
@@ -575,6 +606,13 @@ public class Enemigo {
     private Animation<TextureRegion> cargarAnimacion(String ruta, int cantidad,
                                                        float duracionDeCadaImagen,
                                                        boolean medirParaUnion) {
+        return cargarAnimacion(ruta, cantidad, duracionDeCadaImagen, medirParaUnion, false);
+    }
+
+    private Animation<TextureRegion> cargarAnimacion(String ruta, int cantidad,
+                                                       float duracionDeCadaImagen,
+                                                       boolean medirParaUnion,
+                                                       boolean medirParaAtaque) {
         TextureRegion[] frames = new TextureRegion[cantidad];
 
         for (int indice = 0; indice < cantidad; indice++) {
@@ -584,6 +622,9 @@ public class Enemigo {
             frames[indice] = new TextureRegion(imagen);
             if (medirParaUnion) {
                 acumularLimites(nombre);
+            }
+            if (medirParaAtaque) {
+                acumularLimitesAtaque(nombre);
             }
         }
 
@@ -619,6 +660,31 @@ public class Enemigo {
         unionMinY = Math.min(unionMinY, minY);
         unionMaxX = Math.max(unionMaxX, maxX);
         unionMaxY = Math.max(unionMaxY, maxY);
+    }
+
+    private void acumularLimitesAtaque(String ruta) {
+        Pixmap pixmap = new Pixmap(Gdx.files.internal(ruta));
+        int minX = pixmap.getWidth();
+        int maxX = -1;
+        int maxY = -1;
+
+        for (int pixelY = 0; pixelY < pixmap.getHeight(); pixelY++) {
+            for (int pixelX = 0; pixelX < pixmap.getWidth(); pixelX++) {
+                if ((pixmap.getPixel(pixelX, pixelY) & 0xff) != 0) {
+                    minX = Math.min(minX, pixelX);
+                    maxX = Math.max(maxX, pixelX);
+                    maxY = Math.max(maxY, pixelY);
+                }
+            }
+        }
+        pixmap.dispose();
+
+        if (maxX < minX || maxY < 0) {
+            throw new IllegalArgumentException("El sprite no contiene pixeles visibles: " + ruta);
+        }
+        ataqueUnionMinX = Math.min(ataqueUnionMinX, minX);
+        ataqueUnionMaxX = Math.max(ataqueUnionMaxX, maxX);
+        ataqueUnionMaxY = Math.max(ataqueUnionMaxY, maxY);
     }
 
     // Liberar las imagenes cuando se cierra el nivel.

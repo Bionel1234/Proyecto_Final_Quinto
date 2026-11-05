@@ -257,6 +257,9 @@ public class JuegoScreen implements Screen {
         if (indice == 3) {
             return "Zona 2: Nivel 1";
         }
+        if (indice == MainClass.ETAPA_ZONA2_NIVEL2) {
+            return "Zona 2: Nivel 2";
+        }
         return "Jefe de Zona 2: El Destructor";
     }
 
@@ -271,6 +274,8 @@ public class JuegoScreen implements Screen {
             game.setScreen(new ColiseoScreen(game, false));
         } else if (etapa == MainClass.ETAPA_ZONA2) {
             game.setScreen(new MapaScreen(game, "Zona 2", 1));
+        } else if (etapa == MainClass.ETAPA_ZONA2_NIVEL2) {
+            game.setScreen(new MapaScreen(game, "Zona 2", 2));
         } else if (etapa == MainClass.ETAPA_JEFE_ZONA2) {
             game.setScreen(new ColiseoScreen(game, true));
         }
